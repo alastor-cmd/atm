@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<title>Редактор заявок ATM</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg:#f5f5f4; --surface:#fff; --border:#d6d3d1; --border-strong:#a8a29e;
+  --text:#1c1917; --text-muted:#57534e; --accent:#1e40af; --accent-hover:#1e3a8a;
+  --warn:#b91c1c; --warn-bg:#fee2e2; --warn-soft:#fef3c7; --ok:#15803d;
+  --highlight:#fef9c3; --row-hover:#fafaf9; --info:#0369a1;
+}
+*{box-sizing:border-box;}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);margin:0;padding:0;font-size:13px;line-height:1.4;}
+
+
+
+/* ===== HEADER ===== */
+#appHeader{background:var(--accent);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;}
+#appHeader h1{margin:0;font-size:16px;font-weight:600;}
+
+.db-status{font-size:11px;opacity:.8;}
+
+/* ===== MAIN APP ===== */
+#appPage{display:none;padding:14px 16px;}
+
+.toolbar,.filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;}
+.btn{padding:6px 12px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);border-radius:4px;cursor:pointer;font-size:13px;font-family:inherit;}
+.btn:hover{background:#f5f5f4;}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+.btn-primary:hover:not(:disabled){background:var(--accent-hover);}
+.btn-log{background:#7c3aed;color:#fff;border-color:#7c3aed;}
+.btn-log:hover{background:#6d28d9;}
+.btn-sync{background:#0369a1;color:#fff;border-color:#0369a1;}
+.btn-sync:hover{background:#075985;}
+.file-input{display:none;}
+.filters input[type="text"],.filters select{padding:5px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:13px;font-family:inherit;}
+.filters label{color:var(--text-muted);font-size:12px;}
+
+.summary{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 14px;min-width:110px;}
+.stat-label{color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;}
+.stat-value{font-size:18px;font-weight:600;margin-top:2px;}
+.stat.warn .stat-value{color:var(--warn);}
+.stat.soft .stat-value{color:#b45309;}
+.stat.ok .stat-value{color:var(--ok);}
+
+.tabs{display:flex;gap:4px;margin-bottom:8px;border-bottom:1px solid var(--border);}
+.tab{padding:7px 14px;border:1px solid transparent;border-bottom:none;background:transparent;color:var(--text-muted);cursor:pointer;font-size:13px;font-family:inherit;border-radius:4px 4px 0 0;margin-bottom:-1px;}
+.tab:hover{color:var(--text);}
+.tab.active{background:var(--surface);border-color:var(--border);color:var(--text);font-weight:600;}
+
+.info-line{font-size:12px;color:var(--text-muted);margin-bottom:6px;}
+.info-line kbd{background:var(--surface);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:11px;font-family:monospace;}
+
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:auto;max-height:calc(100vh - 300px);}
+table{border-collapse:collapse;width:max-content;min-width:100%;font-size:12px;table-layout:fixed;}
+th{background:#f5f5f4;text-align:left;padding:7px 8px;border-bottom:2px solid var(--border-strong);border-right:1px solid var(--border);font-weight:600;position:sticky;top:0;white-space:nowrap;z-index:2;user-select:none;box-sizing:border-box;}
+th .resizer{position:absolute;top:0;right:0;width:6px;height:100%;cursor:col-resize;user-select:none;background:transparent;z-index:3;}
+th .resizer:hover,th .resizer.resizing{background:var(--accent);opacity:.5;}
+th.editable{background:var(--highlight);}
+th.sortable{cursor:pointer;}
+th.sortable:hover{background:#e7e5e4;}
+th .sort-arrow{font-size:10px;margin-left:4px;color:var(--text-muted);}
+th .sort-arrow.active{color:var(--accent);}
+td{padding:4px 6px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);vertical-align:middle;overflow:hidden;text-overflow:ellipsis;}
+td.col-wrap,th.col-wrap{white-space:normal;word-break:break-word;}
+td.col-compact,th.col-compact{white-space:nowrap;}
+tr:hover td{background:var(--row-hover);}
+tr.row-overdue td{background:var(--warn-bg);}
+tr.row-overdue:hover td{background:#fecaca;}
+tr.row-soon td{background:var(--warn-soft);}
+tr.row-soon:hover td{background:#fde68a;}
+tr.row-selected td{background:#dbeafe !important;}
+td input[type="text"],td input[type="number"],td input[type="date"],td select{width:100%;border:1px solid transparent;background:transparent;padding:3px 5px;font-size:12px;font-family:inherit;border-radius:3px;}
+td input:focus,td select:focus{border-color:var(--accent);background:#fff;outline:none;}
+td select{cursor:pointer;}
+td select:hover{border-color:var(--border);}
+td input.dup-warn{background:var(--warn-bg);border-color:var(--warn);}
+td.checkbox-cell{text-align:center;width:56px;}
+td input[type="checkbox"]{width:16px;height:16px;cursor:pointer;accent-color:var(--accent);}
+td.status-cell{font-weight:500;white-space:nowrap;text-align:center;font-size:11px;}
+.status-missing{color:var(--warn);}
+.status-ready{color:var(--ok);font-size:12px;}
+.status-pending{color:#b45309;}
+td.col-port input,td.col-date input,td.col-id input,td.col-sd input,td input,td select{box-sizing:border-box;}
+td.col-id{font-family:"SF Mono",Monaco,monospace;font-weight:500;white-space:nowrap;}
+td.col-fio select{width:100%;}
+td.action-cell{white-space:nowrap;text-align:center;min-width:130px;}
+.btn-launch,.btn-back,.btn-del,.btn-dup{padding:4px 8px;border:1px solid var(--border-strong);background:var(--surface);border-radius:3px;cursor:pointer;font-size:11px;font-family:inherit;margin:0 1px;}
+.btn-launch{background:var(--ok);color:#fff;border-color:var(--ok);}
+.btn-launch:hover:not(:disabled){background:#166534;}
+.btn-launch:disabled{background:#d6d3d1;border-color:#d6d3d1;cursor:not-allowed;}
+.btn-back:hover{background:#f5f5f4;}
+.btn-dup{color:var(--info);}
+.btn-dup:hover{background:#e0f2fe;}
+.btn-del{color:var(--warn);width:24px;padding:4px 6px;}
+.btn-del:hover{background:var(--warn);color:#fff;border-color:var(--warn);}
+td.meta-cell{font-size:10px;color:var(--text-muted);white-space:nowrap;}
+.empty-state{padding:60px 20px;text-align:center;color:var(--text-muted);}
+
+.bulk-bar{display:none;background:var(--accent);color:#fff;padding:8px 14px;border-radius:6px;margin-bottom:8px;align-items:center;gap:12px;font-size:13px;}
+.bulk-bar.show{display:flex;}
+.bulk-bar button{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 10px;border-radius:3px;cursor:pointer;font-family:inherit;font-size:12px;}
+.bulk-bar button:hover{background:rgba(255,255,255,.3);}
+
+/* ===== MODAL ===== */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;align-items:center;justify-content:center;}
+.modal-overlay.show{display:flex;}
+.modal{background:#fff;border-radius:8px;padding:20px;max-width:700px;width:95%;max-height:85vh;overflow:auto;}
+.modal h2{margin:0 0 12px 0;font-size:16px;}
+.modal .funnel-row{display:flex;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border);}
+.modal .funnel-row:last-child{border-bottom:none;}
+.modal .bar{background:var(--accent);height:6px;border-radius:3px;margin-top:4px;}
+
+/* ===== LOG TABLE ===== */
+.log-table{width:100%;border-collapse:collapse;font-size:12px;}
+.log-table th{background:#f5f5f4;padding:6px 10px;text-align:left;border-bottom:2px solid var(--border-strong);white-space:nowrap;}
+.log-table td{padding:5px 10px;border-bottom:1px solid var(--border);}
+.log-table tr:hover td{background:#fafaf9;}
+.log-action-edit{color:#0369a1;}
+.log-action-add{color:#15803d;}
+.log-action-delete{color:#b91c1c;}
+.log-action-launch{color:#7c3aed;}
+.log-action-return{color:#b45309;}
+.log-action-import{color:#0369a1;}
+.log-action-export{color:#15803d;}
+.log-action-login{color:#1e40af;}
+</style>
+</head>
+<body>
+
+
+
+<!-- ===== APP HEADER ===== -->
+<div id="appHeader">
+  <svg width="24" height="24" viewBox="0 0 48 48" fill="none"><rect width="48" height="48" rx="10" fill="rgba(255,255,255,.2)"/><rect x="10" y="14" width="28" height="20" rx="3" fill="white" opacity="0.9"/><rect x="14" y="22" width="8" height="8" rx="1" fill="#1e40af"/></svg>
+  <h1>Редактор заявок ATM</h1>
+  <span class="db-status" id="dbStatus">● Завантаження...</span>
+</div>
+
+<!-- ===== APP PAGE ===== -->
+<div id="appPage" style="display:block">
+  <div class="toolbar">
+    <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls">
+    <button class="btn" id="importBtn" onclick="document.getElementById('fileInput').click()" style="display:none">📥 Імпорт Excel</button>
+    <button class="btn btn-primary" id="exportBtn" onclick="exportExcel()" disabled>📤 Експорт Excel</button>
+    <button class="btn btn-sync" id="syncBtn" onclick="syncFromDB()">🔄 Оновити з бази</button>
+    <button class="btn btn-sync" id="updateDbBtn" onclick="pushAllToDB()" style="display:none">💾 Оновити базу</button>
+    <button class="btn" id="addRowBtn" onclick="addRow()" disabled>+ Рядок</button>
+    <button class="btn" id="reportBtn" onclick="showReport()" disabled>📊 Звіт</button>
+    <button class="btn btn-log" id="logBtn" onclick="showLog()">📋 Журнал дій</button>
+    <span style="margin-left:auto;color:var(--text-muted);font-size:12px;" id="info">Завантаження...</span>
+  </div>
+
+  <div class="filters" id="filters" style="display:none">
+    <label>Пошук:</label>
+    <input type="text" id="searchInput" placeholder="ID, адреса, SD..." style="width:200px" oninput="render()">
+    <label>FIO:</label>
+    <select id="fioFilter" onchange="render()"><option value="">Усі</option></select>
+    <label>Статус:</label>
+    <select id="statusFilter" onchange="render()">
+      <option value="">Усі</option>
+      <option value="ready">Готові до запуску</option>
+      <option value="pending">Незавершені</option>
+      <option value="overdue">Прострочені</option>
+      <option value="soon">Дедлайн ≤ 10 робочих днів</option>
+    </select>
+    <button class="btn" onclick="resetFilters()">Скинути</button>
+  </div>
+
+  <div class="summary" id="summary" style="display:none"></div>
+
+  <div class="tabs" id="tabs" style="display:none">
+    <button class="tab active" id="tabActive" onclick="switchSheet('active')">Активні (0)</button>
+    <button class="tab" id="tabZap" onclick="switchSheet('zap')">ZAP — запущені (0)</button>
+  </div>
+
+  <div class="info-line" id="hotkeysHint" style="display:none">
+    <kbd>Tab</kbd>/<kbd>Shift+Tab</kbd> — між полями · <kbd>Ctrl+D</kbd> — дублювати · <kbd>Ctrl+S</kbd> — експорт
+  </div>
+
+  <div class="bulk-bar" id="bulkBar">
+    <span id="bulkCount">0 вибрано</span>
+    <button onclick="bulkLaunch()">Запустити вибрані →</button>
+    <button onclick="bulkCheck('dogovir')">✓ dogovir</button>
+    <button onclick="bulkCheck('DIS')">✓ DIS</button>
+    <button onclick="bulkCheck('BEC')">✓ BEC</button>
+    <button onclick="bulkCheck('Limi')">✓ Limi</button>
+    <button onclick="bulkDelete()">✕ Видалити</button>
+    <button onclick="clearSelection()" style="margin-left:auto">Скасувати</button>
+  </div>
+
+  <div class="table-wrap" id="tableWrap">
+    <div class="empty-state"><p>Завантаження даних з бази...</p></div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal" onclick="if(event.target.id==='modal')closeModal()">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<script>
+// ===== USERS =====
+const USERS = {
+  'PavelkoOV':      { fio: 'Павелко О.В.',      full: 'Павелко Олександр Валентинович' },
+  'PilkevichAA':    { fio: 'Пількевич А.А.',     full: 'Пількевич Андрій Анатолійович' },
+  'DanevichNS':     { fio: 'Даневич Н.С.',       full: 'Даневич Наталія Сергіївна' },
+  'strazhevskijoo': { fio: 'Стражевський О.О.',  full: 'Стражевський Олексій Олексійович' },
+  'dembnovetskyiiv':{ fio: 'Дембновецький І.В.', full: 'Дембновецький Іван Володимирович' }
+};
+
+// ===== SESSION =====
+let currentUser = 'admin';
+let currentUserFio = '';
+
+function getHostname() {
+  try { return window.location.hostname || 'local'; } catch(e) { return 'unknown'; }
+}
+function getBrowserInfo() {
+  const ua = navigator.userAgent;
+  if (ua.includes('Chrome')) return 'Chrome';
+  if (ua.includes('Firefox')) return 'Firefox';
+  if (ua.includes('Edge')) return 'Edge';
+  return 'Browser';
+}
+// Псевдо-ідентифікатор машини (зберігається в localStorage)
+function getMachineId() {
+  let id = localStorage.getItem('atm_machine_id');
+  if (!id) {
+    id = 'PC-' + Math.random().toString(36).substr(2,6).toUpperCase();
+    localStorage.setItem('atm_machine_id', id);
+  }
+  return id;
+}
+function getMachineName() {
+  // Спроба отримати ім'я з localStorage (можна задати вручну)
+  return localStorage.getItem('atm_computer_name') || getMachineId();
+}
+
+// ===== SUPABASE =====
+const SB_URL = 'https://bdluvpnkxkaxtrbgskio.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJkbHV2cG5reGtheHRyYmdza2lvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxMDM3MDYsImV4cCI6MjA5NTY3OTcwNn0.ov7f-2wEQ8WCJMABNj9f3O9_11zkUOlwTzVINzGsKs4';
+
+async function sbGet(table, params='') {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?${params}`, {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbPost(table, data) {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY,
+                'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+    body: JSON.stringify(data)
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+async function sbDelete(table, filter) {
+  await fetch(`${SB_URL}/rest/v1/${table}?${filter}`, {
+    method: 'DELETE',
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+  });
+}
+
+async function initDB() {
+  try {
+    await sbGet('atm_data', 'limit=1');
+    document.getElementById('dbStatus').textContent = '● Supabase підключено';
+    return true;
+  } catch(e) {
+    document.getElementById('dbStatus').textContent = '⚠ Помилка: ' + e.message;
+    return false;
+  }
+}
+
+function dbPut(storeName, obj) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    const req = store.put(obj);
+    req.onsuccess = () => resolve();
+    req.onerror = (e) => reject(e);
+  });
+}
+
+function serializeRow(row) {
+  const r = Object.assign({}, row);
+  // Серіалізуємо __meta
+  if (r.__meta) { r.__meta_json = JSON.stringify(r.__meta); delete r.__meta; }
+  // boolean -> 0/1 для надійності IndexedDB
+  ['dogovir','DIS','BEC','Limi','ТМК'].forEach(k => {
+    if (k in r) r[k] = r[k] ? 1 : 0;
+  });
+  return r;
+}
+
+function dbPutAll(storeName, items) {
+  return new Promise((resolve, reject) => {
+    if (!db) return resolve();
+    const tx = db.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    store.clear();
+    items.forEach(item => {
+      const s = serializeRow(item);
+      // Видаляємо _rowId щоб autoIncrement призначив новий
+      delete s._rowId;
+      store.add(s);
+    });
+    tx.oncomplete = () => resolve();
+    tx.onerror = (e) => reject(e);
+  });
+}
+
+// Зберегти один рядок (upsert за _rowId)
+function dbSaveRow(storeName, row) {
+  if (!db || !row._rowId) return dbPutAll(storeName, storeName==='atm'?sheets.active:sheets.zap);
+  return new Promise((resolve) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const s = serializeRow(row);
+    tx.objectStore(storeName).put(s);
+    tx.oncomplete = resolve;
+    tx.onerror = resolve;
+  });
+}
+
+function dbGetAll(s) { return Promise.resolve([]); }
+function rowToSB(row, sheet) {
+  return {
+    atm_id:        row.ID             || '',
+    adres:         row.ADRES           || '',
+    sd:            row.SD              || '',
+    date_pog:      row['date pog']     || '',
+    org:           row.Org             || '',
+    old_atm:       row['Old ATM']      || '',
+    fio:           row.FIO             || '',
+    dogovir:       !!row.dogovir,
+    kanal:         row['Канал']        || '',
+    dis:           !!row.DIS,
+    bec:           !!row.BEC,
+    limi:          !!row.Limi,
+    tmk:           !!(row['ТМК']),
+    port:          row.port            || '',
+    date_slo:      row['Date SLO']     || '',
+    date_start:    row['Date Start']   || '',
+    note:          row.Note            || '',
+    sheet:         sheet,
+    meta_created:  (row.__meta||{}).created    || '',
+    meta_modified: (row.__meta||{}).modified   || '',
+    meta_launched: (row.__meta||{}).launchedAt || '',
+  };
+}
+async function saveAllToServer() {
+  try {
+    await sbDelete('atm_data', 'id=gte.0');
+    const all = [
+      ...sheets.active.map(r => rowToSB(r,'ATM')),
+      ...sheets.zap.map(r => rowToSB(r,'ZAP'))
+    ];
+    if (all.length > 0) await sbPost('atm_data', all);
+  } catch(e) { console.warn('saveAllToServer error:', e); }
+}
+function dbPutAll(storeName, items) { return saveAllToServer(); }
+function dbSaveRow(storeName, row)  { return saveAllToServer(); }
+
+
+function dbAddLog(entry) {
+  sbPost('atm_log', {
+    log_time: entry.time     || '',
+    login:    entry.user     || '',
+    user_fio: entry.userFio  || '',
+    action:   entry.action   || '',
+    atm_id:   entry.atmId    || '',
+    details:  entry.details  || '',
+    computer: entry.computer || '',
+    browser:  entry.browser  || '',
+  }).catch(()=>{});
+}
+
+async function saveSheetToDB(s) { return saveAllToServer(); }
+
+async function loadFromDB() {
+  try {
+    document.getElementById('tableWrap').innerHTML =
+      '<div class="empty-state"><p>⏳ Завантаження з бази...</p></div>';
+    const rows = await sbGet('atm_data', 'order=id.asc&limit=1000');
+    const atmRows = rows.filter(r => r.sheet === 'ATM').map(r => deserializeRow(r));
+    const zapRows = rows.filter(r => r.sheet === 'ZAP').map(r => deserializeRow(r));
+    if (atmRows.length > 0 || zapRows.length > 0) {
+      sheets.active = atmRows;
+      sheets.zap = zapRows;
+    } else {
+      const raw = SEED_DATA;
+      sheets.active = (raw.ATM || []).map(r => normalizeRow(r, false));
+      sheets.zap    = (raw.ZAP || []).map(r => normalizeRow(r, true));
+      await saveAllToServer();
+      logAction('import','—',`Початкові дані: ATM=${sheets.active.length}, ZAP=${sheets.zap.length}`);
+    }
+    currentSheet = 'active';
+    rebuildFilters(); render(); updateUI();
+    document.getElementById('dbStatus').textContent =
+      '● Supabase · ATM: ' + sheets.active.length + ', ZAP: ' + sheets.zap.length;
+    document.getElementById('info').textContent =
+      `ATM ${sheets.active.length}, ZAP ${sheets.zap.length} · ${new Date().toLocaleTimeString('uk-UA')}`;
+  } catch(e) {
+    console.error('loadFromDB error', e);
+    document.getElementById('tableWrap').innerHTML =
+      `<div class="empty-state"><p>⚠ Помилка: ${e.message}</p>
+       <button class="btn btn-primary" onclick="syncFromDB()">🔄 Повторити</button></div>`;
+  }
+}
+
+function deserializeRow(r) {
+  const row = {};
+  row.ID           = r.atm_id      || '';
+  row.ADRES        = r.adres       || '';
+  row.SD           = r.sd          || '';
+  row['date pog']  = r.date_pog    || '';
+  row.Org          = r.org         || '';
+  row['Old ATM']   = r.old_atm     || '';
+  row.FIO          = r.fio         || '';
+  row.dogovir      = !!r.dogovir;
+  row['Канал']     = r.kanal       || '';
+  row.DIS          = !!r.dis;
+  row.BEC          = !!r.bec;
+  row.Limi         = !!r.limi;
+  row['ТМК']       = !!r.tmk;
+  row.port         = r.port        || '';
+  row['Date SLO']  = r.date_slo    || '';
+  row['Date Start']= r.date_start  || '';
+  row.Note         = r.note        || '';
+  row['Статус']    = '';
+  row.__meta = {
+    created:    r.meta_created  || todayISO(),
+    modified:   r.meta_modified || todayISO(),
+    launchedAt: r.meta_launched || null,
+  };
+  row._sbId = r.id;
+  return row;
+}
+
+async function syncFromDB() {
+  const btn = document.getElementById('syncBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Завантаження...'; }
+  await loadFromDB();
+  logAction('sync', '—', `Завантажено з бази: ATM=${sheets.active.length}, ZAP=${sheets.zap.length}`, currentUser);
+  if (btn) { btn.disabled = false; btn.textContent = '🔄 Оновити з бази'; }
+  document.getElementById('info').textContent =
+    `Оновлено ${new Date().toLocaleTimeString('uk-UA')} · ATM ${sheets.active.length}, ZAP ${sheets.zap.length}`;
+}
+
+async function pushAllToDB() {
+  if (!confirm('Перезаписати базу поточними даними? Всі зміни інших користувачів будуть втрачені.')) return;
+  const btn2 = document.getElementById('updateDbBtn');
+  if (btn2) { btn2.disabled = true; btn2.textContent = '⏳ Збереження...'; }
+  await Promise.all([
+    dbPutAll('atm', sheets.active),
+    dbPutAll('zap', sheets.zap)
+  ]);
+  logAction('push-db', '—', `Оновлення бази: ATM=${sheets.active.length}, ZAP=${sheets.zap.length}`);
+  if (btn2) { btn2.disabled = false; btn2.textContent = '💾 Оновити базу'; }
+  document.getElementById('info').textContent =
+    `База оновлена ${new Date().toLocaleTimeString('uk-UA')} · ATM ${sheets.active.length}, ZAP ${sheets.zap.length}`;
+  alert(`✅ Збережено: ATM ${sheets.active.length}, ZAP ${sheets.zap.length}`);
+}
+
+// ===== SEED DATA (вбудовані дані з Excel) =====
+const SEED_DATA = {"ATM": [{"ID": "А1600049", "ADRES": "м. Кременчук вул. Давида Кострова буд. 72А", "SD": "SC-14460667", "date pog": "04.05.2026", "Org": "МаркетОпт", "Old ATM": "", "FIO": "Пількевич", "Статус": "немає: dogovir, DIS, BEC, Limi, port, Канал", "dogovir": false, "Канал": "", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "05.05.2026", "__modified": "15.05.2026", "__launched": ""}, {"ID": "К2200046", "ADRES": "м. Славута, вул. Соборності, буд.3", "SD": "", "date pog": "04.05.2026", "Org": "ТВБВ 10022/0129", "Old ATM": "", "FIO": "", "Статус": "немає: dogovir, DIS, BEC, Limi, port", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": ""}, {"ID": "A1400022", "ADRES": "м. Миколаїв, Привокзальна площа, 1", "SD": "", "date pog": "04.05.2026", "Org": "Залізничний вокзал (Вантажний)", "Old ATM": "", "FIO": "", "Статус": "немає: dogovir, DIS, BEC, Limi, port, Канал", "dogovir": false, "Канал": "", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": ""}, {"ID": "А2000054", "ADRES": "", "SD": "", "date pog": "04.05.2026", "Org": "ТОВ \"Харківський бронетанковий завод\"", "Old ATM": "", "FIO": "", "Статус": "немає: dogovir, DIS, BEC, Limi, port, Канал", "dogovir": false, "Канал": "", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": ""}, {"ID": "А2400039", "ADRES": "м.Чернігів вул. Княжа буд.16", "SD": "", "date pog": "04.05.2026", "Org": "приміщенні сектору інкасації №6", "Old ATM": "", "FIO": "", "Статус": "немає: dogovir, DIS, BEC, Limi, port, Канал", "dogovir": false, "Канал": "", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": ""}, {"ID": "A1400033", "ADRES": "м. Вознесенськ, вул. 228 Стрілецької дивізії, 26", "SD": "SC-14278165", "date pog": "04.05.2026", "Org": "лікарні", "Old ATM": "", "FIO": "Дембновецький", "Статус": "немає: dogovir, DIS, BEC, Limi, port, Канал", "dogovir": false, "Канал": "", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "07.07.2026", "Note": "очікуємо на договір оренди з Лікарнею", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": ""}, {"ID": "A0900260", "ADRES": "смт. Глеваха, вул. Підприємницька, буд.7", "SD": "SC-14410128", "date pog": "04.05.2026", "Org": "Западинський ринок", "Old ATM": "", "FIO": "Павелко", "Статус": "29.05.2026", "dogovir": false, "Канал": "4g", "DIS": false, "BEC": false, "Limi": false, "port": "6032.0", "Date Start": "29.05.2026", "Note": "Встановлення сигналізації", "__created": "05.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "K0100050", "ADRES": "м.Козятин, вул. Січових Стрільців, 21", "SD": "SC-13728839", "date pog": "05.05.2026", "Org": "ТВБВ №10001/0132", "Old ATM": "", "FIO": "Пількевич", "Статус": "немає: DIS, BEC, Limi, port", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "Зав ремонту", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": ""}, {"ID": "K0100010", "ADRES": "м.Козяти, вул. Січових Стрільців, 21", "SD": "SC-13729128", "date pog": "05.05.2026", "Org": "ТВБВ №10001/0132 ", "Old ATM": " ", "FIO": "Пількевич", "Статус": "немає: DIS, BEC, Limi, port", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "Зав ремонту", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": ""}, {"ID": "K0100068", "ADRES": "м.Козяти, вул. Січових Стрільців, 21", "SD": "SC-13729357", "date pog": "05.05.2026", "Org": "ТВБВ №10001/0132 ", "Old ATM": " ", "FIO": "Пількевич", "Статус": "немає: DIS, BEC, Limi, port", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "Зав ремонту", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": ""}, {"ID": "A1901883", "ADRES": " м. Тернопіль, бульв. Д. Вишневецького, буд. 1 прим.48", "SD": "SC-13824956", "date pog": "05.05.2026", "Org": "Магазин 23/7", "Old ATM": "A1900023", "FIO": "Павелко", "Статус": "немає: DIS, Limi", "dogovir": false, "Канал": "4g", "DIS": false, "BEC": false, "Limi": false, "port": "6041.0", "Date Start": "", "Note": "", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A0801895", "ADRES": "с. Стара Гута, вул. Зарічна, 4", "SD": "SC-13825438", "date pog": "05.05.2026", "Org": "НПП \"СИНЬОГОРА\", Готель", "Old ATM": "A0800030", "FIO": "Стражевський", "Статус": "немає: DIS, Limi", "dogovir": false, "Канал": "Провод", "DIS": false, "BEC": false, "Limi": false, "port": "6041.0", "Date Start": "02.06.2026", "Note": "Погодження СБ", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A0801892", "ADRES": "Верховина вул. Франка, 3", "SD": "SC-13825478", "date pog": "05.05.2026", "Org": "Селищна рада", "Old ATM": "A0801927", "FIO": "Стражевський", "Статус": "немає: DIS, Limi", "dogovir": false, "Канал": "Провод", "DIS": false, "BEC": false, "Limi": false, "port": "6045.0", "Date Start": "02.06.2026", "Note": "Погодження СБ", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A0801894", "ADRES": "м. Івано-Франківськ вул. Целевича, 20а", "SD": "SC-13825523", "date pog": "05.05.2026", "Org": "Супермаркет Тайстара", "Old ATM": "A0801931", "FIO": "Стражевський", "Статус": "немає: DIS, Limi", "dogovir": false, "Канал": "Провод", "DIS": false, "BEC": false, "Limi": false, "port": "6037.0", "Date Start": "02.06.2026", "Note": "Погодження СБ", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A0601888", "ADRES": "с.Кваси, вул.Центральна,163", "SD": "SC-13825870", "date pog": "05.05.2026", "Org": "Санаторій \"Гірська Тиса\"", "Old ATM": "A0600004", "FIO": "Даневич", "Статус": "немає: DIS, Limi, Канал", "dogovir": false, "Канал": "", "DIS": false, "BEC": false, "Limi": false, "port": "6045.0", "Date Start": "", "Note": "Не запускаємо", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A0601886", "ADRES": "с.Великий Бичків, вул. Грушевського,107", "SD": "SC-13830977", "date pog": "05.05.2026", "Org": "ТЦ \"Олімпія\"", "Old ATM": "A0600018", "FIO": "Даневич", "Статус": "немає: DIS, Limi, Канал", "dogovir": false, "Канал": "", "DIS": false, "BEC": false, "Limi": false, "port": "6039.0", "Date Start": "", "Note": "Не погоджено", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A0601885", "ADRES": "смт.Королево, вул.Вокзальна,3", "SD": "SC-13830989", "date pog": "05.05.2026", "Org": "Ломбард", "Old ATM": "A0600032", "FIO": "Даневич", "Статус": "немає: DIS, Limi, Канал", "dogovir": false, "Канал": "", "DIS": false, "BEC": false, "Limi": false, "port": "6037.0", "Date Start": "", "Note": "Не погоджено", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A1301760", "ADRES": " м.Самбір, вул.Сагайдачного, буд.2/4", "SD": "SC-13843550", "date pog": "05.05.2026", "Org": "ТВБВ 10013/0215", "Old ATM": "A1301912", "FIO": "Даневич", "Статус": "немає: DIS, Limi", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "6044.0", "Date Start": "20.05.2026", "Note": "Монтаж ДІС", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A1301759", "ADRES": "Золочів, вул. Івана Мазепи, буд. 1а ", "SD": "SC-13843605", "date pog": "05.05.2026", "Org": "ТВБВ 10013/065", "Old ATM": "A1301897", "FIO": "Даневич", "Статус": "немає: DIS, Limi", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "6045.0", "Date Start": "18.05.2026", "Note": "Монтаж ДІС", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A0101853", "ADRES": "Могилів-Подільський,   вул. Стависька, 46", "SD": "SC-13859020", "date pog": "05.05.2026", "Org": "ТВБВ №10001/0151", "Old ATM": "А0100013", "FIO": "Пількевич", "Статус": "немає: DIS", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "6044.0", "Date Start": "19.05.2026", "Note": "Монтаж ДІС", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A0101852", "ADRES": "селище Томашпіль, вул.Гаврилюка Ігоря, 15", "SD": "SC-13859050", "date pog": "05.05.2026", "Org": "ТВБВ №10001/002", "Old ATM": "A0100009", "FIO": "Пількевич", "Статус": "немає: DIS", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "6044.0", "Date Start": "11.05.2026", "Note": "Монтаж ДІС", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A2501937", "ADRES": "м.Чернівці проспект Незалежності, 109А", "SD": "SC-13871454", "date pog": "05.05.2026", "Org": "КНП \"Міська дитяча поліклініка\"", "Old ATM": "", "FIO": "Пількевич", "Статус": "немає: DIS", "dogovir": false, "Канал": "4g", "DIS": false, "BEC": false, "Limi": false, "port": "6037.0", "Date Start": "04.05.2026", "Note": "Запущено, дог", "__created": "05.05.2026", "__modified": "21.05.2026", "__launched": ""}, {"ID": "A2001839", "ADRES": "м. Харків, вул. Дерев'янко, 38", "SD": "SC-13925687", "date pog": "05.05.2026", "Org": "ТВБВ 10020/0186", "Old ATM": "A2000001", "FIO": "Пількевич", "Статус": "немає: DIS", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "6038.0", "Date Start": "18.05.2026", "Note": "Монтаж ДІС", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A1501833", "ADRES": "Одеса, вул. Варненська, 7-б", "SD": "SC-13989208", "date pog": "05.05.2026", "Org": "ТВБВ 10015/0562", "Old ATM": "A1500013", "FIO": "Пількевич", "Статус": "01.06.2026", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "6044.0", "Date Start": "01.06.2026", "Note": "", "__created": "05.05.2026", "__modified": "26.05.2026", "__launched": ""}, {"ID": "A1501831", "ADRES": "Одеса, вул. Вадатурського, 57", "SD": "SC-13989221", "date pog": "05.05.2026", "Org": "ТВБВ 10015/0599", "Old ATM": "A1500071", "FIO": "Пількевич", "Статус": "01.06.2026", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "6034.0", "Date Start": "01.06.2026", "Note": "", "__created": "05.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "A1501828", "ADRES": "Сараата, вул. Крістіана Вернера, 83-а", "SD": "SC-13989238", "date pog": "05.05.2026", "Org": "ТВБВ 10015/0362", "Old ATM": "A1500009", "FIO": "Пількевич", "Статус": "14.05.2026", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "6044.0", "Date Start": "14.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "A1001896", "ADRES": "Долинська, пров. Кірова 3Б", "SD": "SC-14003831", "date pog": "05.05.2026", "Org": "ТВБВ №10010/0103", "Old ATM": "A1000005", "FIO": "Пількевич", "Статус": "немає: DIS", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "6044.0", "Date Start": "02.06.2026", "Note": "", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A1001895", "ADRES": "Кропивницький, вул. Набережна, 11", "SD": "SC-14004091", "date pog": "05.05.2026", "Org": "ТВБВ №10010/047", "Old ATM": "A1000006", "FIO": "Пількевич", "Статус": "немає: dogovir, DIS", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "6044.0", "Date Start": "02.06.2026", "Note": "", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A1001894", "ADRES": "Знам'янка,,вул. Партинщанська 11а", "SD": "SC-14004099", "date pog": "05.05.2026", "Org": "ТВБВ № 10010/0172 ", "Old ATM": "A1000007", "FIO": "Пількевич", "Статус": "немає: DIS", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "6044.0", "Date Start": "02.06.2026", "Note": "", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A1301757", "ADRES": "м.Львів, вул. Ів.Франка, 17", "SD": "SC-14056084", "date pog": "05.05.2026", "Org": "ТВБВ 10013/0301", "Old ATM": "A1301851", "FIO": "Даневич", "Статус": "немає: DIS, Limi", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "6044.0", "Date Start": "28.05.2026", "Note": "Монтаж ДІС", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A1301756", "ADRES": "м.Львів, вул.Городоцька, 302", "SD": "SC-14026877", "date pog": "05.05.2026", "Org": "ТЦ ЕПІЦЕНТР", "Old ATM": "A1300059", "FIO": "Даневич", "Статус": "25.05.2026", "dogovir": false, "Канал": "Провод", "DIS": false, "BEC": false, "Limi": false, "port": "6034.0", "Date Start": "25.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "A1301754", "ADRES": "Трускавець, вул. Стуса, 1", "SD": "SC-14026887", "date pog": "05.05.2026", "Org": "ТВБВ №10013/012", "Old ATM": "A1300050", "FIO": "Даневич", "Статус": "13.05.2026", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "6037.0", "Date Start": "13.05.2026", "Note": "Монтаж ДІС", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "K1001893", "ADRES": "Світловодськ, вул. Героїв України, 110.", "SD": "SC-14063619", "date pog": "05.05.2026", "Org": "Світловодська центральна районна лікарня", "Old ATM": "", "FIO": "Пількевич", "Статус": "немає: port", "dogovir": false, "Канал": "4g", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "14.05.2026", "Note": "Підключення ПЦ", "__created": "05.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "A2501883", "ADRES": "м. Заставна вул.Чорновола, 4 ", "SD": "SC-14169489", "date pog": "05.05.2026", "Org": "ТВБВ 10025/0128", "Old ATM": "A2500055", "FIO": "Пількевич", "Статус": "18.05.2026", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "6038.0", "Date Start": "18.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "A2501884", "ADRES": "м. Герца, вул. Центральна,16", "SD": "SC-14084074", "date pog": "05.05.2026", "Org": "ТВБВ 10025/062", "Old ATM": "A2500046", "FIO": "Пількевич", "Статус": "немає: DIS", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "6038.0", "Date Start": "19.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "07.05.2026", "__launched": ""}, {"ID": "A2501885", "ADRES": "м.Чернівці  вул. Головна, 119", "SD": "SC-14084116", "date pog": "05.05.2026", "Org": "ТВБВ 10025/057", "Old ATM": "A2500015", "FIO": "Пількевич", "Статус": "немає: DIS", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "6047.0", "Date Start": "20.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "07.05.2026", "__launched": ""}, {"ID": "A0100065", "ADRES": "Літин,   вул Богдана Хмельницького буд.7 ", "SD": "SC-14122426", "date pog": "05.05.2026", "Org": "автовокзал", "Old ATM": "", "FIO": "Пількевич", "Статус": "немає: dogovir, DIS, Limi, port, Канал", "dogovir": false, "Канал": "", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "07.07.2026", "Note": "Договір", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": ""}, {"ID": "A2201866", "ADRES": "м.Хмельницький вул.Тернопільська, буд.17v", "SD": "SC-14218756", "date pog": "05.05.2026", "Org": "ТОВ Новатор", "Old ATM": "", "FIO": "Даневич", "Статус": "немає: DIS, port, Канал", "dogovir": false, "Канал": "", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "01.06.2026", "Note": "очкуємо погодження доступу на організацію", "__created": "05.05.2026", "__modified": "06.05.2026", "__launched": ""}, {"ID": "A2401834", "ADRES": "м.Чернігів вул.Соборності буд.19", "SD": "SC-14225535", "date pog": "05.05.2026", "Org": "магазин", "Old ATM": "", "FIO": "Даневич", "Статус": "немає: dogovir, DIS, port", "dogovir": false, "Канал": "4g", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "01.06.2026", "Note": "очікуємо договір оренди", "__created": "05.05.2026", "__modified": "06.05.2026", "__launched": ""}, {"ID": "K1001892", "ADRES": "Кропивницький, вул. Пашутинська , 16/19", "SD": "SC-14279384", "date pog": "05.05.2026", "Org": "Газорозподільні мережі України", "Old ATM": "", "FIO": "Пількевич", "Статус": "01.06.2026", "dogovir": false, "Канал": "Провод", "DIS": false, "BEC": false, "Limi": false, "port": "6044.0", "Date Start": "01.06.2026", "Note": "Монтаж ДІС", "__created": "05.05.2026", "__modified": "26.05.2026", "__launched": ""}, {"ID": "A2301939", "ADRES": "м.Кам'янка,вул. Покровська,буд.90", "SD": "SC-14284745", "date pog": "05.05.2026", "Org": "Кам'янська багатопрофільна лікарня", "Old ATM": "", "FIO": "Даневич", "Статус": "немає: dogovir, DIS, BEC, Limi, port, Канал", "dogovir": false, "Канал": "", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "01.06.2026", "Note": "заключення договору оренди ДІС", "__created": "05.05.2026", "__modified": "06.05.2026", "__launched": ""}, {"ID": "A0901466", "ADRES": "м.Бровари вул. Київська, буд.253", "SD": "SC-14307610", "date pog": "05.05.2026", "Org": "Епіцентр", "Old ATM": "А0900109", "FIO": "Павелко", "Статус": "19.05.2026", "dogovir": false, "Канал": "Провод", "DIS": false, "BEC": false, "Limi": false, "port": "6047.0", "Date Start": "19.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "22.05.2026", "__launched": ""}, {"ID": "A2301851", "ADRES": "м. Черкаси, бульв. Шевченка, 320", "SD": "SC-14315465", "date pog": "05.05.2026", "Org": "Магазин \"Моллі\"", "Old ATM": "A2300013", "FIO": "Даневич", "Статус": "немає: DIS, Limi, Канал", "dogovir": false, "Канал": "", "DIS": false, "BEC": false, "Limi": false, "port": "6039.0", "Date Start": "01.06.2026", "Note": "", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A2301850", "ADRES": "м. Черкаси, бульв. Шевченка, 205", "SD": "SC-14315483", "date pog": "05.05.2026", "Org": "ЦНТІ", "Old ATM": "A2300011", "FIO": "Даневич", "Статус": "немає: DIS, Limi, Канал", "dogovir": false, "Канал": "", "DIS": false, "BEC": false, "Limi": false, "port": "6044.0", "Date Start": "01.06.2026", "Note": "", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A2301849", "ADRES": " м.Городище, вул. Миру, 48", "SD": "SC-14315495", "date pog": "05.05.2026", "Org": "аптека \"Подорожник\"", "Old ATM": "A2300010", "FIO": "Даневич", "Статус": "немає: DIS, Limi, Канал", "dogovir": false, "Канал": "", "DIS": false, "BEC": false, "Limi": false, "port": "6043.0", "Date Start": "01.06.2026", "Note": "", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A2301848", "ADRES": " с.Вільшана, вул.Шевченка, 180", "SD": "SC-14315513", "date pog": "05.05.2026", "Org": "ТОВ \"Бум-корн\"", "Old ATM": "A2301895", "FIO": "Даневич", "Статус": "немає: DIS, Limi, Канал", "dogovir": false, "Канал": "", "DIS": false, "BEC": false, "Limi": false, "port": "6043.0", "Date Start": "01.06.2026", "Note": "", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A2201863", "ADRES": "м.Волочиськ, вул.Незалежності, 27", "SD": "SC-14364267", "date pog": "05.05.2026", "Org": "ресторан \"Золотий колос\"", "Old ATM": "А2201924", "FIO": "Даневич", "Статус": "немає: DIS", "dogovir": false, "Канал": "Провод", "DIS": false, "BEC": false, "Limi": false, "port": "6034.0", "Date Start": "01.06.2026", "Note": "", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A2201862", "ADRES": "с.Понінака, вул.Перемоги, буд.34/5", "SD": "SC-14364329", "date pog": "05.05.2026", "Org": "Понінківська картонно-паперова фабрика", "Old ATM": "А2201910", "FIO": "Даневич", "Статус": "немає: DIS", "dogovir": false, "Канал": "Провод", "DIS": false, "BEC": false, "Limi": false, "port": "6045.0", "Date Start": "01.06.2026", "Note": "", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A2201861", "ADRES": "м.Старокостянтинів, вул.Грушевського, 18", "SD": "SC-14364385", "date pog": "05.05.2026", "Org": "приміщення аптеки", "Old ATM": "А2200019", "FIO": "Даневич", "Статус": "немає: DIS", "dogovir": false, "Канал": "Провод", "DIS": false, "BEC": false, "Limi": false, "port": "6041.0", "Date Start": "01.06.2026", "Note": "", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A0501858", "ADRES": "Житомир,  просп. Миру, 37", "SD": "SC-1437714", "date pog": "05.05.2026", "Org": "ТВБВ № 10005/019", "Old ATM": "А0500026", "FIO": "Пількевич", "Статус": "немає: DIS, BEC, Limi", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "6041.0", "Date Start": "16.06.2026", "Note": "", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A0501859", "ADRES": "м. Житомир пр-т Миру, 22", "SD": "SC-14377646", "date pog": "05.05.2026", "Org": "Житомирський військовий інститут ім.С.П.Корольова", "Old ATM": "A0500064", "FIO": "Пількевич", "Статус": "немає: DIS, BEC, Limi", "dogovir": false, "Канал": "4g", "DIS": false, "BEC": false, "Limi": false, "port": "6045.0", "Date Start": "16.06.2026", "Note": "", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A0501857", "ADRES": "м. Овруч вул. Базарна, 6", "SD": "SC-14377675", "date pog": "05.05.2026", "Org": "Овруцький кооперативний ринок", "Old ATM": "А0500063", "FIO": "Пількевич", "Статус": "немає: DIS, BEC, Limi", "dogovir": false, "Канал": "4g", "DIS": false, "BEC": false, "Limi": false, "port": "6045.0", "Date Start": "16.06.2026", "Note": "", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A0501861", "ADRES": "м. Звягель вул. Шевченка, 6", "SD": "SC-14377711", "date pog": "05.05.2026", "Org": "ТВБВ № 10005/057", "Old ATM": "A0501921", "FIO": "Пількевич", "Статус": "немає: DIS, BEC, Limi", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "6044.0", "Date Start": "16.06.2026", "Note": "", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": ""}, {"ID": "A1801879", "ADRES": "м. Суми, вул. Ковпака, 59/4", "SD": "SC-14403992", "date pog": "05.05.2026", "Org": "Торгівельний комплекс", "Old ATM": "", "FIO": "Даневич", "Статус": "немає: DIS, Limi, port", "dogovir": false, "Канал": "Провод", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "05.05.2026", "__modified": "14.05.2026", "__launched": ""}, {"ID": "A1801880", "ADRES": " с. Боромля, вул. Сумська, 2", "SD": "SC-14404007", "date pog": "05.05.2026", "Org": "Селищна рада", "Old ATM": "", "FIO": "Даневич", "Статус": "немає: DIS, Limi, port", "dogovir": false, "Канал": "Провод", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "05.05.2026", "__modified": "14.05.2026", "__launched": ""}, {"ID": "A1801881", "ADRES": "м..Конотоп, пл. Ринок, 24А", "SD": "SC-14404028", "date pog": "05.05.2026", "Org": "магазин \"Світ взуття\"", "Old ATM": "", "FIO": "Даневич", "Статус": "немає: DIS, BEC, Limi, port", "dogovir": false, "Канал": "Провод", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "05.05.2026", "__modified": "14.05.2026", "__launched": ""}, {"ID": "A1801882", "ADRES": "м.Конотоп вул. Лазаревського, 12", "SD": "SC-14404039", "date pog": "05.05.2026", "Org": "Магазин \"Фора\"", "Old ATM": "", "FIO": "Даневич", "Статус": "немає: DIS, Limi, port", "dogovir": false, "Канал": "Провод", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "05.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "A1701854", "ADRES": "м. Сарни вул. Європейська 9/2", "SD": "SC-14413019", "date pog": "05.05.2026", "Org": "\"Нова пошта\" відділення №2", "Old ATM": "", "FIO": "Стражевський", "Статус": "немає: DIS, Limi, port", "dogovir": false, "Канал": "Провод", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "27.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "A0300111", "ADRES": "м.Кривий Ріг, вул. Сергія Колачевського, 3а", "SD": "SC-14507317", "date pog": "28.05.2026", "Org": "Станція «Рокувата» Укрзалізниця", "Old ATM": "", "FIO": "Стражевський", "Статус": "немає: dogovir, DIS, Limi, port, Канал", "dogovir": false, "Канал": "", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "28.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "A0800041", "ADRES": "Товмачик, вул. Привокзальна, буд.30", "SD": "SC-14503020", "date pog": "28.05.2026", "Org": "Колонія", "Old ATM": "", "FIO": "Стражевський", "Статус": "немає: dogovir, DIS, BEC, Limi, port, Канал", "dogovir": false, "Канал": "", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "28.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "A0900180", "ADRES": "м.Київ,пр-т Оболонський, 15", "SD": "SC-14489540", "date pog": "28.05.2026", "Org": "ТВБВ № 10026/0143", "Old ATM": "", "FIO": "Павелко", "Статус": "29.05.2026", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "6035.0", "Date Start": "29.05.2026", "Note": "", "__created": "28.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "A0301791", "ADRES": "м. Вільногірськ, вул. Центральна, буд.39", "SD": "SC-14489032", "date pog": "28.05.2026", "Org": "ТВБВ №10003/0509", "Old ATM": "A0300038", "FIO": "Стражевський", "Статус": "немає: DIS, Limi, port", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "28.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "A0301790", "ADRES": "м. Кам'янське, пр. Конституції, 21", "SD": "SC-14489022", "date pog": "28.05.2026", "Org": "маг.\"Продукти\"", "Old ATM": "A0300004", "FIO": "Стражевський", "Статус": "немає: DIS, Limi, port", "dogovir": false, "Канал": "Провод", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "28.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "A0301789", "ADRES": "с. Лозуватка, вул. Миру, буд. 30", "SD": "SC-14489006", "date pog": "28.05.2026", "Org": "маг \"Продукти\"", "Old ATM": "A0301938", "FIO": "Стражевський", "Статус": "немає: DIS, Limi, port", "dogovir": false, "Канал": "Провод", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "28.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "A0900111", "ADRES": "м.Буча, вул. Левка Лук'яненко, буд.66-а", "SD": "SC-14484653", "date pog": "28.05.2026", "Org": "ТЦ \"Пасаж\"", "Old ATM": "", "FIO": "Павелко", "Статус": "немає: BEC, Limi, port", "dogovir": false, "Канал": "4g", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "28.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "", "ADRES": "м. Житомир, вул. Перемоги, 24", "SD": "SC-14472651", "date pog": "28.05.2026", "Org": "магазині мережі «АТБ»", "Old ATM": "", "FIO": "Пількевич", "Статус": "немає: dogovir, DIS, BEC, Limi, port, Канал", "dogovir": false, "Канал": "", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "28.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "K0800002", "ADRES": "м. Снятин, вул. Шевченка, 2", "SD": "SC-14469445", "date pog": "28.05.2026", "Org": "ТВБВ №10008/093", "Old ATM": "", "FIO": "Стражевський", "Статус": "немає: DIS, port", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "28.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "A1600049", "ADRES": "м. Кременчук вул. Давида Кострова буд. 72 А", "SD": "SC-14460667", "date pog": "28.05.2026", "Org": "Мережа супермаркетів \"Маркетопт\"", "Old ATM": "", "FIO": "Пількевич", "Статус": "немає: port", "dogovir": false, "Канал": "4g", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "28.05.2026", "Note": "", "__created": "28.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "A0201885", "ADRES": "Луцьк  просп. Соборності, 11А", "SD": "SC-14447309", "date pog": "28.05.2026", "Org": "ТВБВ №10002/017", "Old ATM": "A0200062", "FIO": "Стражевський", "Статус": "немає: DIS, port", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "28.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "A0201884", "ADRES": "селище Ратне вул. Каштанова, 16", "SD": "SC-14447272", "date pog": "28.05.2026", "Org": "ТВБВ №10002/070", "Old ATM": "A0200014", "FIO": "Стражевський", "Статус": "немає: DIS, port", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "28.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "A2501882", "ADRES": "м.Чернівці вул. Хотинська, 10А", "SD": "SC-14461441", "date pog": "28.05.2026", "Org": "ТЦ \"Епіцентр\"", "Old ATM": "", "FIO": "Пількевич", "Статус": "немає: DIS, port", "dogovir": false, "Канал": "4g", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "28.05.2026", "__modified": "28.05.2026", "__launched": ""}, {"ID": "", "ADRES": "м..Конотоп, вул. Лазаревського, 12", "SD": "SC-14404039", "date pog": "28.05.2026", "Org": "Магазин \"Фора\"", "Old ATM": "", "FIO": "", "Статус": "немає: dogovir, DIS, BEC, Limi, port", "dogovir": false, "Канал": "ТВБВ", "DIS": false, "BEC": false, "Limi": false, "port": "", "Date Start": "", "Note": "", "__created": "28.05.2026", "__modified": "28.05.2026", "__launched": ""}], "ZAP": [{"ID": "A1901881", "ADRES": "смт. Залізці, вул. Т. Шевченка, буд. 49  ", "SD": "SC-13972010", "date pog": "05.05.2026", "Org": "ТВБВ№10019/025", "Old ATM": "A1900006", "FIO": "Павелко", "Статус": "30.04.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6037", "Date Start": "30.04.2026", "Note": "", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": "05.05.2026"}, {"ID": "A1301764", "ADRES": "Бібрка, вул.Глібовицька, 6", "SD": "SC-14349383", "date pog": "05.05.2026", "Org": "Адмінприіщеня", "Old ATM": "", "FIO": "Даневич", "Статус": "01.05.2026", "dogovir": true, "Канал": "4g", "DIS": true, "BEC": true, "Limi": true, "port": "6037", "Date Start": "01.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": "05.05.2026"}, {"ID": "A2001840", "ADRES": "м. Харків, проспект Героїв Харкова, 190/1", "SD": "SC-13925687", "date pog": "05.05.2026", "Org": "ТВБВ 10020/0188", "Old ATM": "A2000002", "FIO": "Пількевич", "Статус": "05.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6037", "Date Start": "05.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": "05.05.2026"}, {"ID": "A1601875", "ADRES": "Лубни,  вул. Ярослава Мудрого, 47А", "SD": "SC-14084521", "date pog": "05.05.2026", "Org": "ТВБВ №10016/0226", "Old ATM": "А1600027", "FIO": "Пількевич", "Статус": "04.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6037", "Date Start": "04.05.2026", "Note": "Done", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": "05.05.2026"}, {"ID": "A0500019", "ADRES": "Бердичів, вул. Європейська,  26", "SD": "SC-14267542", "date pog": "05.05.2026", "Org": "ТЦ Бальзак", "Old ATM": "", "FIO": "Пількевич", "Статус": "05.05.2026", "dogovir": true, "Канал": "4g", "DIS": true, "BEC": true, "Limi": true, "port": "6029", "Date Start": "05.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": "05.05.2026"}, {"ID": "А2500025", "ADRES": "м. Чернівці, вул. Комунальників, 5", "SD": "SC-14289137", "date pog": "05.05.2026", "Org": "КП \"Чернівціводоканал\"", "Old ATM": "", "FIO": "Пількевич", "Статус": "05.05.2026", "dogovir": true, "Канал": "4g", "DIS": true, "BEC": true, "Limi": true, "port": "6029", "Date Start": "05.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": "05.05.2026"}, {"ID": "A0301792", "ADRES": "м. П'ятихатки , вул. Шевченка, буд. 123", "SD": "SC-14141183", "date pog": "05.05.2026", "Org": "ТВБВ №10003/0498", "Old ATM": "А0300030", "FIO": "Стражевський", "Статус": "04.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6037", "Date Start": "04.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": "05.05.2026"}, {"ID": "A1301755", "ADRES": "Львів, вул. гетьмана Івана Мазепи, буд.1", "SD": "SC-14026883", "date pog": "05.05.2026", "Org": "ТВБВ 10013/0112", "Old ATM": "А1300072", "FIO": "Даневич", "Статус": "04.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6037", "Date Start": "04.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": "06.05.2026"}, {"ID": "A0801893", "ADRES": "м. Бурштин, вул. Калуська, 18", "SD": "SC-14382206", "date pog": "04.05.2026", "Org": "ТВБВ №10008/065", "Old ATM": "А0800010", "FIO": "Стражевський", "Статус": "08.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6038", "Date Start": "08.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": "14.05.2026"}, {"ID": "A0301793", "ADRES": "м.Кривий Ріг, вул. Романа Шухевича, буд. 11", "SD": "SC-14125560", "date pog": "04.05.2026", "Org": "ТВБВ №10003/0347", "Old ATM": "A0300007", "FIO": "Стражевський", "Статус": "05.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6045", "Date Start": "05.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": "14.05.2026"}, {"ID": "K0101926", "ADRES": "м.Тульчин, вул.М.Леонтовича, 47", "SD": "SC-13694604", "date pog": "04.05.2026", "Org": "ТВБВ №10001/03", "Old ATM": "", "FIO": "Пількевич", "Статус": "04.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6037", "Date Start": "04.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": "14.05.2026"}, {"ID": "A2401890", "ADRES": "м. Чернігів, проспект Миру буд.68.", "SD": "SC-14391227", "date pog": "04.05.2026", "Org": "«Фора»", "Old ATM": "", "FIO": "Даневич", "Статус": "11.05.2026", "dogovir": true, "Канал": "4g", "DIS": true, "BEC": true, "Limi": true, "port": "6034", "Date Start": "11.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "14.05.2026", "__launched": "14.05.2026"}, {"ID": "A2201867", "ADRES": " м.Хмельницький, вул.Шевченка, буд.11", "SD": "SC-14049157", "date pog": "05.05.2026", "Org": "ТВБВ 10022/040", "Old ATM": "A2200015", "FIO": "Даневич", "Статус": "25.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6041", "Date Start": "25.05.2026", "Note": "Монтаж ДІС", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": "14.05.2026"}, {"ID": "A2301898", "ADRES": "Шпола, вул.Соборна, 33", "SD": "SC-14174116", "date pog": "05.05.2026", "Org": "Фора", "Old ATM": "", "FIO": "Даневич", "Статус": "11.05.2026", "dogovir": true, "Канал": "4g", "DIS": true, "BEC": true, "Limi": true, "port": "6032", "Date Start": "11.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "14.05.2026", "__launched": "14.05.2026"}, {"ID": "K2200046", "ADRES": "м.Славута, вул. Соборності, буд.3", "SD": "SC-14341041", "date pog": "05.05.2026", "Org": "ТВБВ 10022/0129", "Old ATM": "", "FIO": "Даневич", "Статус": "11.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6026", "Date Start": "11.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": "14.05.2026"}, {"ID": "A2201864", "ADRES": "м.Нетішин, просп.Незалежності, буд.21-а", "SD": "SC-14354835", "date pog": "05.05.2026", "Org": "ТВБВ 10022/0138", "Old ATM": "A2200041", "FIO": "Даневич", "Статус": "05.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6037", "Date Start": "05.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": "14.05.2026"}, {"ID": "K1301885", "ADRES": "м. Самбір, Чайковського, 12", "SD": "SC-14356966", "date pog": "05.05.2026", "Org": "Поліклініка", "Old ATM": "", "FIO": "Даневич", "Статус": "08.05.2026", "dogovir": true, "Канал": "4g", "DIS": true, "BEC": true, "Limi": true, "port": "6029", "Date Start": "08.05.2026", "Note": "Сигналізація", "__created": "05.05.2026", "__modified": "06.05.2026", "__launched": "14.05.2026"}, {"ID": "A1901882", "ADRES": "м. Почаїв, вул. Лосятинська, буд. 4 ", "SD": "SC-13824947", "date pog": "05.05.2026", "Org": "ТВБВ №10019/043", "Old ATM": "A1900009", "FIO": "Павелко", "Статус": "28.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6037", "Date Start": "28.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "14.05.2026", "__launched": "21.05.2026"}, {"ID": "A2001841", "ADRES": "м.Харків, проспект Гагаріна, 173-в, літера \"А-14", "SD": "SC-13927685", "date pog": "05.05.2026", "Org": "ТВБВ 10020/0312", "Old ATM": "A2000018", "FIO": "Пількевич", "Статус": "05.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6044", "Date Start": "05.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "08.05.2026", "__launched": "21.05.2026"}, {"ID": "A0901531", "ADRES": "м.Київ, пр-т. Повітрофлотський, буд.31", "SD": "SC-14344442", "date pog": "05.05.2026", "Org": "Київський національний університет будівництва та архітектури", "Old ATM": "", "FIO": "Павелко", "Статус": "18.05.2026", "dogovir": true, "Канал": "4g", "DIS": true, "BEC": true, "Limi": true, "port": "6029", "Date Start": "18.05.2026", "Note": "Перебранчування", "__created": "05.05.2026", "__modified": "21.05.2026", "__launched": "21.05.2026"}, {"ID": "K0901806", "ADRES": "м. Ірпінь\tвул.Університетська, 31", "SD": "SC-14401048", "date pog": "05.05.2026", "Org": "ТВБВ 10026/0712", "Old ATM": "", "FIO": "Павелко", "Статус": "18.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6026", "Date Start": "18.05.2026", "Note": "Перебранчування", "__created": "05.05.2026", "__modified": "14.05.2026", "__launched": "21.05.2026"}, {"ID": "A2501882", "ADRES": "", "SD": "", "date pog": "26.05.2026", "Org": "", "Old ATM": "A2500028", "FIO": "Пількевич", "Статус": "27.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6034", "Date Start": "27.05.2026", "Note": "", "__created": "26.05.2026", "__modified": "26.05.2026", "__launched": ""}, {"ID": "A1301758", "ADRES": " м.Львів,  вул.Рубчака, 18 ", "SD": "SC-13843524", "date pog": "05.05.2026", "Org": "ТВБВ 10013/0203", "Old ATM": "A1301875", "FIO": "Даневич", "Статус": "18.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6045", "Date Start": "18.05.2026", "Note": "Монтаж ДІС", "__created": "05.05.2026", "__modified": "28.05.2026", "__launched": "28.05.2026"}, {"ID": "K1001897", "ADRES": "місто Світловодськ, вул. Героїв України, 110.", "SD": "SC-13969624", "date pog": "05.05.2026", "Org": "ТВБВ № 10010/0114", "Old ATM": "", "FIO": "Пількевич", "Статус": "08.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6086", "Date Start": "08.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "28.05.2026", "__launched": "28.05.2026"}, {"ID": "A0901467", "ADRES": " с.Гостомель. вул. Свято-Покровська 73Е. Приміщення 184.", "SD": "SC-14023388", "date pog": "05.05.2026", "Org": "ТВБВ№10026/0720", "Old ATM": "", "FIO": "Павелко", "Статус": "05.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6037", "Date Start": "05.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "28.05.2026", "__launched": "28.05.2026"}, {"ID": "K0900388", "ADRES": "с.Гостомель, вул. Свято -Покровська, буд.73 Е", "SD": "SC-14110642", "date pog": "05.05.2026", "Org": "ТВБВ №10026/0720", "Old ATM": "", "FIO": "Павелко", "Статус": "11.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6029", "Date Start": "11.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "05.05.2026", "__launched": "28.05.2026"}, {"ID": "K1301807", "ADRES": "Перемишляни, вул. Галицька, 12", "SD": "SC-14140689", "date pog": "05.05.2026", "Org": "Лікарня", "Old ATM": "", "FIO": "Даневич", "Статус": "14.05.2026", "dogovir": true, "Канал": "4g", "DIS": true, "BEC": true, "Limi": true, "port": "6029", "Date Start": "14.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "28.05.2026", "__launched": "28.05.2026"}, {"ID": "A1401890", "ADRES": "сел. Веселинове, вул. Мозолевського. 36.", "SD": "SC-14279596", "date pog": "05.05.2026", "Org": "ТВБВ № 10014/0161", "Old ATM": "A1400016", "FIO": "Дембновецький", "Статус": "22.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6045", "Date Start": "22.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "28.05.2026", "__launched": "28.05.2026"}, {"ID": "A1601938", "ADRES": "с. Диканька вул. Пушкіна буд. 11 А", "SD": "SC-14314438", "date pog": "05.05.2026", "Org": "ТВБВ № 10016/045", "Old ATM": "", "FIO": "Пількевич", "Статус": "18.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6029", "Date Start": "18.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "28.05.2026", "__launched": "28.05.2026"}, {"ID": "A2000054", "ADRES": "м. Харків, вул. Велика Панасівська, 222", "SD": "SC-14316737", "date pog": "05.05.2026", "Org": "ТОВ \"Харківський бронетанковий завод\"", "Old ATM": "", "FIO": "Пількевич", "Статус": "28.05.2026", "dogovir": true, "Канал": "4g", "DIS": true, "BEC": true, "Limi": true, "port": "6034", "Date Start": "28.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "28.05.2026", "__launched": "28.05.2026"}, {"ID": "K1501893", "ADRES": "м. Одеса, вул. Привокзальна  2", "SD": "SC-14411896", "date pog": "05.05.2026", "Org": "ТВБВ 10015/0560", "Old ATM": "", "FIO": "Дембновецький", "Статус": "08.05.2026", "dogovir": true, "Канал": "ТВБВ", "DIS": true, "BEC": true, "Limi": true, "port": "6015", "Date Start": "08.05.2026", "Note": "", "__created": "05.05.2026", "__modified": "28.05.2026", "__launched": "28.05.2026"}, {"ID": "A1500081", "ADRES": "м. Південне, пр-т Григорівського Десанту, 3", "SD": "SC-14426444", "date pog": "28.05.2026", "Org": "ТРЦ Волна", "Old ATM": "", "FIO": "Дембновецький", "Статус": "25.05.2026", "dogovir": true, "Канал": "4g", "DIS": true, "BEC": true, "Limi": true, "port": "6035", "Date Start": "25.05.2026", "Note": "", "__created": "28.05.2026", "__modified": "28.05.2026", "__launched": "28.05.2026"}]};
+
+function loadSeedData() {
+  const raw = SEED_DATA;
+  const atmRows = (raw.ATM || []).map(r => normalizeRow(r, false));
+  const zapRows = (raw.ZAP || []).map(r => normalizeRow(r, true));
+  sheets.active = atmRows;
+  sheets.zap = zapRows;
+  // Зберігаємо в базу
+  dbPutAll('atm', atmRows).catch(()=>{});
+  dbPutAll('zap', zapRows).catch(()=>{});
+  logAction('import', '—', `Завантажено початкові дані: ATM=${atmRows.length}, ZAP=${zapRows.length}`, currentUser || 'system');
+  currentSheet = 'active';
+  rebuildFilters(); render(); updateUI();
+}
+
+// ===== COLUMNS =====
+const COLUMNS = [
+  { key:'ID', label:'ID', type:'alnum', maxLen:10, sortable:true, width:100 },
+  { key:'ADRES', label:'ADRES', type:'alnum', maxLen:64, sortable:true, wrap:true, width:260 },
+  { key:'SD', label:'SD', type:'sd', sortable:true, width:140 },
+  { key:'date pog', label:'date pog', type:'date', today:true, sortable:true, width:140 },
+  { key:'Org', label:'Org', type:'alnum', maxLen:64, sortable:true, wrap:true, width:240 },
+  { key:'Old ATM', label:'Old ATM', type:'alnum', maxLen:10, width:100 },
+  { key:'FIO', label:'FIO', type:'select', sortable:true, width:150,
+    options:['','Павелко','Даневич','Пількевич','Дембновецький','Стражевський'] },
+  { key:'Статус', label:'Статус', type:'status', width:180 },
+  { key:'dogovir', label:'dogovir', type:'check', width:70 },
+  { key:'Канал', label:'Канал', type:'select', options:['','Провод','4g','ТВБВ'], width:110 },
+  { key:'DIS', label:'DIS', type:'check', width:60 },
+  { key:'BEC', label:'BEC', type:'check', width:60 },
+  { key:'Limi', label:'Limi', type:'check', width:60 },
+  { key:'ТМК', label:'ТМК', type:'check', width:65 },
+  { key:'port', label:'port', type:'port', width:80 },
+  { key:'Date SLO', label:'Date of sending SLO', type:'date', sortable:true, width:150 },
+  { key:'Date Start', label:'Date Start', type:'date', sortable:true, width:140 },
+  { key:'Note', label:'Нотатки', type:'note', wrap:true, width:220 },
+];
+const CHECK_COLS = ['dogovir','DIS','BEC','Limi'];
+const ALIASES = { 'ID':['id','№','код','code'] };
+
+let sheets = { active:[], zap:[] };
+let currentSheet = 'active';
+let sortBy = null, sortDir = 1;
+let selected = new Set();
+let colWidths = {};
+
+document.getElementById('fileInput').addEventListener('change', handleFile);
+document.addEventListener('keydown', handleHotkey);
+
+// ===== RESIZE =====
+let resizeState = null;
+document.addEventListener('mousedown', (e) => {
+  if (!e.target.classList.contains('resizer')) return;
+  e.preventDefault(); e.stopPropagation();
+  const th = e.target.closest('th');
+  resizeState = { col: e.target.dataset.col, startX: e.clientX, startWidth: th.offsetWidth, th };
+  e.target.classList.add('resizing');
+  document.body.style.cursor = 'col-resize';
+});
+document.addEventListener('mousemove', (e) => {
+  if (!resizeState) return;
+  const delta = e.clientX - resizeState.startX;
+  const newWidth = Math.max(40, resizeState.startWidth + delta);
+  colWidths[resizeState.col] = newWidth;
+  resizeState.th.style.width = newWidth + 'px';
+});
+document.addEventListener('mouseup', () => {
+  if (!resizeState) return;
+  document.querySelectorAll('.resizer.resizing').forEach(el => el.classList.remove('resizing'));
+  document.body.style.cursor = '';
+  resizeState = null;
+});
+document.addEventListener('dblclick', (e) => {
+  if (!e.target.classList.contains('resizer')) return;
+  delete colWidths[e.target.dataset.col];
+  render();
+});
+
+// ===== IMPORT =====
+function handleFile(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    try {
+      const wb = XLSX.read(new Uint8Array(evt.target.result), { type:'array', cellDates:true });
+      const names = wb.SheetNames;
+      const zapName = names.find(n => /^zap$/i.test(n));
+      const logName = names.find(n => /^log$/i.test(n));
+      const activeName = names.find(n => n !== zapName && n !== logName) || names[0];
+      sheets.active = XLSX.utils.sheet_to_json(wb.Sheets[activeName], { defval:'', raw:false }).map(r => normalizeRow(r));
+      sheets.zap = zapName ? XLSX.utils.sheet_to_json(wb.Sheets[zapName], { defval:'', raw:false }).map(r => normalizeRow(r, true)) : [];
+      // Зберігаємо в базу
+      dbPutAll('atm', sheets.active).catch(()=>{});
+      dbPutAll('zap', sheets.zap).catch(()=>{});
+      logAction('import', file.name, `ATM=${sheets.active.length}, ZAP=${sheets.zap.length}`);
+      currentSheet = 'active';
+      rebuildFilters(); render(); updateUI();
+    } catch(err) { alert('Помилка імпорту: ' + err.message); }
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value = '';
+}
+
+function findValue(rawRow, col) {
+  if (rawRow[col.key] !== undefined && rawRow[col.key] !== '') return rawRow[col.key];
+  const t = col.key.toLowerCase().trim();
+  for (const k in rawRow) if (k.toLowerCase().trim() === t && rawRow[k] !== '') return rawRow[k];
+  const a = ALIASES[col.key] || [];
+  for (const al of a) for (const k in rawRow) if (k.toLowerCase().trim() === al && rawRow[k] !== '') return rawRow[k];
+  return '';
+}
+
+function normalizeRow(r, isZap) {
+  const row = {};
+  COLUMNS.forEach(col => {
+    let v = findValue(r, col);
+    if (col.type === 'check') v = parseCheck(v);
+    else if (col.type === 'date') { v = parseDate(v); if (!v && col.today) v = todayISO(); }
+    else if (col.type === 'port') v = (v===''||v===null) ? '' : String(v).replace(/\D/g,'').slice(0,4);
+    else if (col.type === 'alnum') v = String(v??'').slice(0, col.maxLen||64);
+    else if (col.type === 'sd') v = sanitizeSD(v);
+    else if (col.type === 'select') {
+      v = v===null ? '' : String(v).trim();
+      if (v && !col.options.includes(v)) v = '';
+    }
+    else if (col.type === 'note') v = String(v??'').slice(0,500);
+    else if (col.type === 'status') v = '';
+    else v = v===null ? '' : String(v);
+    row[col.key] = v;
+  });
+  if (!row['Канал'] && /^ТВБВ/i.test(String(row['Org']||'').trim())) row['Канал'] = 'ТВБВ';
+  row.__meta = {
+    created: parseDate(r['__created']) || todayISO(),
+    modified: parseDate(r['__modified']) || todayISO(),
+    launchedAt: isZap ? (parseDate(r['__launched']) || todayISO()) : null,
+  };
+  return row;
+}
+
+function parseCheck(v) {
+  if (v===true||v===1) return true;
+  return ['1','true','✓','✔','x','+','так','yes','y','v'].includes(String(v??'').trim().toLowerCase());
+}
+function parseDate(v) {
+  if (!v) return '';
+  if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0,10);
+  const s = String(v).trim();
+  let m = s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  return '';
+}
+// Підрахунок робочих днів (пн-пт) від дати до сьогодні (позитивне = майбутнє)
+function workdaysBetween(isoFrom, isoTo) {
+  if (!isoFrom || !isoTo) return null;
+  let d1 = new Date(isoFrom); d1.setHours(0,0,0,0);
+  let d2 = new Date(isoTo);   d2.setHours(0,0,0,0);
+  let sign = d2 >= d1 ? 1 : -1;
+  let [start, end] = sign === 1 ? [d1, d2] : [d2, d1];
+  let count = 0;
+  let cur = new Date(start);
+  while (cur < end) {
+    cur.setDate(cur.getDate() + 1);
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6) count++;
+  }
+  return sign * count;
+}
+// Робочих днів від isoDate до сьогодні (від'ємне = минула, позитивне = майбутнє)
+function workdaysUntil(isoDate) {
+  if (!isoDate) return null;
+  return workdaysBetween(todayISO(), isoDate);
+}
+
+function fmtDateUk(iso) {
+  if (!iso) return '';
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : iso;
+}
+function todayISO() { return new Date().toISOString().slice(0,10); }
+function nowTS() { return new Date().toLocaleString('uk-UA', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' }); }
+function sanitizeSD(v) {
+  if (!v) return '';
+  const s = String(v).trim().toUpperCase();
+  const m = s.match(/SC-?(\d+)/);
+  if (m) return 'SC-' + m[1];
+  const d = s.replace(/\D/g,'');
+  return d ? 'SC-' + d : '';
+}
+
+// ===== STATUS =====
+function getMissing(row) {
+  const m = [];
+  // Усі check-поля включаючи ТМК
+  [...CHECK_COLS, 'ТМК'].forEach(k => { if (!row[k]) m.push(k); });
+  if (!row['port']) m.push('port');
+  if (!row['Канал']) m.push('Канал');
+  return m;
+}
+// Повністю готово: всі галочки + Канал + Date SLO заповнено
+function isReady(row) {
+  return getMissing(row).length === 0 && row['Date SLO'];
+}
+function isPending(row) { return getMissing(row).length > 0; }
+// Робочих днів до/від дати відправки SLO
+function sloWorkdaysUntil(row) {
+  if (!row['Date SLO']) return null;
+  return workdaysUntil(row['Date SLO']);
+}
+// Прострочка: понад 10 робочих днів після Date SLO (тільки якщо Date SLO заповнено)
+function isOverdue(row) {
+  const d = sloWorkdaysUntil(row);
+  return d !== null && d < -10;
+}
+// Дедлайн ≤ 10 робочих днів (майбутнє, але близько)
+function isSoon(row) {
+  const d = sloWorkdaysUntil(row);
+  return d !== null && d >= 0 && d <= 10;
+}
+function rowClass(row) {
+  if (currentSheet !== 'active') return '';
+  if (!row['Date SLO']) return '';
+  if (isOverdue(row)) return 'row-overdue';
+  if (isSoon(row)) return 'row-soon';
+  return '';
+}
+function computeStatus(row) {
+  const m = getMissing(row);
+  if (m.length > 0) {
+    return `<span class="status-missing">немає: ${m.join(', ')}</span>`;
+  }
+  // Всі галочки є і Канал є — показуємо Date SLO або підказку
+  if (!row['Date SLO']) {
+    return `<span class="status-pending">вкажіть Date of sending SLO</span>`;
+  }
+  return `<span class="status-ready">${fmtDateUk(row['Date SLO'])}</span>`;
+}
+
+// ===== FILTERS =====
+function rebuildFilters() {
+  const fioSet = new Set();
+  [...sheets.active,...sheets.zap].forEach(r => { if (r.FIO) fioSet.add(r.FIO); });
+  document.getElementById('fioFilter').innerHTML = '<option value="">Усі</option>' +
+    [...fioSet].sort().map(f => `<option value="${escapeAttr(f)}">${escapeHtml(f)}</option>`).join('');
+}
+function getFilteredIndices() {
+  const q = (document.getElementById('searchInput')?.value||'').trim().toLowerCase();
+  const fio = document.getElementById('fioFilter')?.value||'';
+  const status = document.getElementById('statusFilter')?.value||'';
+  const rows = sheets[currentSheet];
+  const result = [];
+  rows.forEach((r,i) => {
+    if (q) {
+      const hay = [r.ID,r.ADRES,r.SD,r.Org,r['Old ATM']].map(x=>String(x||'').toLowerCase()).join(' ');
+      if (!hay.includes(q)) return;
+    }
+    if (fio && r.FIO!==fio) return;
+    if (status==='ready' && !isReady(r)) return;
+    if (status==='pending' && !isPending(r)) return;
+    if (status==='overdue' && !isOverdue(r)) return;
+    if (status==='soon' && !isSoon(r)) return;
+    result.push(i);
+  });
+  if (sortBy) {
+    result.sort((a,b) => {
+      const va=String(rows[a][sortBy]||'').toLowerCase();
+      const vb=String(rows[b][sortBy]||'').toLowerCase();
+      return va<vb?-sortDir:va>vb?sortDir:0;
+    });
+  }
+  return result;
+}
+
+// ===== RENDER =====
+function render() {
+  const rows = sheets[currentSheet];
+  if (rows.length===0) {
+    document.getElementById('tableWrap').innerHTML =
+      `<div class="empty-state"><p>${currentSheet==='zap'?'Аркуш ZAP порожній':'Немає даних'}</p></div>`;
+    updateSummary(); return;
+  }
+  const indices = getFilteredIndices();
+  let html = '<table><thead><tr>';
+  if (currentSheet==='active') html += `<th style="width:32px"><input type="checkbox" onchange="toggleAll(this.checked)"></th>`;
+  COLUMNS.forEach(col => {
+    const editable = col.type!=='status';
+    const wrap = col.wrap?'col-wrap':'';
+    const sortable = col.sortable?'sortable':'';
+    const arrow = sortBy===col.key?`<span class="sort-arrow active">${sortDir===1?'▲':'▼'}</span>`:'';
+    const onclick = col.sortable?`onclick="if(!event.target.classList.contains('resizer'))toggleSort('${col.key}')"` :'';
+    const w = colWidths[col.key]||col.width||120;
+    html += `<th class="${editable?'editable':''} ${wrap} ${sortable}" data-col="${col.key}" style="width:${w}px" ${onclick}>${col.label}${arrow}<span class="resizer" data-col="${col.key}"></span></th>`;
+  });
+  html += '<th>Дії</th>';
+  if (currentSheet==='zap') html += '<th>Запущено</th>';
+  html += '</tr></thead><tbody>';
+  indices.forEach(i => {
+    const row = rows[i];
+    const cls = [rowClass(row), selected.has(i)?'row-selected':''].filter(Boolean).join(' ');
+    html += `<tr class="${cls}">`;
+    if (currentSheet==='active') html += `<td class="checkbox-cell"><input type="checkbox" ${selected.has(i)?'checked':''} onchange="toggleSelect(${i},this.checked)"></td>`;
+    COLUMNS.forEach(col => { html += renderCell(row,col,i); });
+    html += renderActionCell(i,row);
+    if (currentSheet==='zap') html += `<td class="meta-cell">${fmtDateUk(row.__meta?.launchedAt)||'—'}</td>`;
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('tableWrap').innerHTML = html;
+  updateSummary(); updateBulkBar();
+}
+
+function renderCell(row, col, idx) {
+  const v = row[col.key];
+  const wrapClass = col.wrap?'col-wrap':'';
+  if (col.type==='alnum') {
+    const cls = (col.key==='ID'?'col-id ':'')+wrapClass;
+    const softHandler = col.key==='Org'
+      ? `updateCellOrg(${idx},this.value.slice(0,${col.maxLen}))`
+      : `updateCellSoft(${idx},'${col.key}',this.value.slice(0,${col.maxLen}))`;
+    const isDup = col.key==='ID' && v && isDuplicateId(v,idx);
+    return `<td class="${cls}"><input type="text" maxlength="${col.maxLen}"
+      class="${isDup?'dup-warn':''}" title="${isDup?'Дублікат ID':''}"
+      value="${escapeAttr(v)}"
+      oninput="${softHandler}"
+      onchange="onCellChange(${idx},'${col.key}',this.value)"></td>`;
+  }
+  if (col.type==='note') {
+    return `<td class="${wrapClass}"><input type="text" maxlength="500"
+      placeholder="Нотатка..." value="${escapeAttr(v)}"
+      oninput="updateCellSoft(${idx},'${col.key}',this.value)"
+      onchange="onCellChange(${idx},'Note',this.value)"></td>`;
+  }
+  if (col.type==='select') {
+    const opts = col.options.map(o =>
+      `<option value="${escapeAttr(o)}" ${o===v?'selected':''}>${escapeHtml(o||'—')}</option>`).join('');
+    const cls = col.key==='FIO'?'col-fio':'';
+    return `<td class="${cls}"><select onchange="updateCell(${idx},'${col.key}',this.value)">${opts}</select></td>`;
+  }
+  if (col.type==='sd') {
+    return `<td class="col-sd"><input type="text" placeholder="SC-XXXXXXXX" maxlength="20"
+      value="${escapeAttr(v)}"
+      oninput="updateCellSoft(${idx},'${col.key}',this.value)"
+      onchange="this.value=sanitizeSD(this.value);updateCell(${idx},'${col.key}',this.value)"></td>`;
+  }
+  if (col.type==='check') {
+    return `<td class="checkbox-cell"><input type="checkbox" ${v?'checked':''}
+      onchange="updateCell(${idx},'${col.key}',this.checked)"></td>`;
+  }
+  if (col.type==='port') {
+    const dup = v && isDuplicatePort(v,row.ADRES,idx);
+    return `<td class="col-port"><input type="text" inputmode="numeric" maxlength="4"
+      class="${dup?'dup-warn':''}" title="${dup?'Цей порт вже на цій адресі':''}"
+      value="${escapeAttr(v)}"
+      oninput="this.value=this.value.replace(/\\D/g,'').slice(0,4);updateCellSoft(${idx},'${col.key}',this.value)"
+      onchange="onCellChange(${idx},'port',this.value)"></td>`;
+  }
+  if (col.type==='date') {
+    return `<td class="col-date"><input type="date" value="${escapeAttr(v)}"
+      onchange="updateCell(${idx},'${col.key}',this.value)"></td>`;
+  }
+  if (col.type==='status') return `<td class="status-cell">${computeStatus(row)}</td>`;
+  return `<td>${escapeHtml(v)}</td>`;
+}
+
+function renderActionCell(idx, row) {
+  if (currentSheet==='active') {
+    const ready = isReady(row);
+    return `<td class="action-cell">
+      <button class="btn-launch" ${ready?'':'disabled'} title="${ready?'Перенести в ZAP':'Заповніть всі галочки (включно ТМК), Канал та Date of sending SLO'}" onclick="launchRow(${idx})">Запущено →</button>
+      <button class="btn-dup" onclick="duplicateRow(${idx})" title="Дублювати">⎘</button>
+      <button class="btn-del" onclick="deleteRow(${idx})" title="Видалити">✕</button>
+    </td>`;
+  }
+  return `<td class="action-cell">
+    <button class="btn-back" onclick="returnRow(${idx})">← Повернути</button>
+    <button class="btn-del" onclick="deleteRow(${idx})" title="Видалити">✕</button>
+  </td>`;
+}
+
+function isDuplicateId(id,idx) {
+  if (!id) return false;
+  return sheets[currentSheet].some((r,i) => i!==idx && r.ID===id);
+}
+function isDuplicatePort(port,adres,idx) {
+  if (!port||!adres) return false;
+  return sheets[currentSheet].some((r,i) => i!==idx && r.port===port && r.ADRES===adres);
+}
+
+// ===== CELL UPDATES =====
+function updateCellSoft(idx, key, value) {
+  const rows = sheets[currentSheet];
+  if (!rows[idx]) return;
+  rows[idx][key] = value;
+  if (rows[idx].__meta) rows[idx].__meta.modified = todayISO();
+  refreshRow(idx);
+}
+
+function onCellChange(idx, key, value) {
+  const rows = sheets[currentSheet];
+  if (!rows[idx]) return;
+  const old = rows[idx][key];
+  if (String(old) === String(value)) return;
+  logAction('edit', rows[idx].ID||'(без ID)', `${key}: "${old}" → "${value}"`);
+  const storeName = currentSheet === 'active' ? 'atm' : 'zap';
+  dbSaveRow(storeName, rows[idx]).catch(()=>{});
+}
+
+function updateCell(idx, key, value) {
+  const rows = sheets[currentSheet];
+  if (!rows[idx]) return;
+  const old = rows[idx][key];
+  rows[idx][key] = value;
+  if (rows[idx].__meta) rows[idx].__meta.modified = todayISO();
+  logAction('edit', rows[idx].ID||'(без ID)', `${key}: "${old}" → "${value}"`);
+  const _store = currentSheet === 'active' ? 'atm' : 'zap';
+  dbSaveRow(_store, rows[idx]).catch(()=>{});
+  render();
+}
+
+function updateCellOrg(idx, value) {
+  const rows = sheets[currentSheet];
+  if (!rows[idx]) return;
+  rows[idx]['Org'] = value;
+  if (rows[idx].__meta) rows[idx].__meta.modified = todayISO();
+  if (/^ТВБВ/i.test(String(value).trim()) && !rows[idx]['Канал']) {
+    rows[idx]['Канал'] = 'ТВБВ';
+    saveSheetToDB(currentSheet).catch(()=>{});
+    render();
+  } else {
+    refreshRow(idx);
+  }
+}
+
+function refreshRow(idx) {
+  const tbody = document.querySelector('#tableWrap tbody');
+  if (!tbody) { updateSummary(); return; }
+  const visIdx = getFilteredIndices().indexOf(idx);
+  const tr = tbody.children[visIdx];
+  if (!tr) { updateSummary(); return; }
+  const rows = sheets[currentSheet];
+  const row = rows[idx];
+  const offset = currentSheet==='active'?1:0;
+  const statusColIdx = COLUMNS.findIndex(c => c.type==='status');
+  if (statusColIdx>=0 && tr.children[statusColIdx+offset]) {
+    tr.children[statusColIdx+offset].innerHTML = computeStatus(row);
+  }
+  const idColIdx = COLUMNS.findIndex(c => c.key==='ID');
+  if (idColIdx>=0) {
+    const inp = tr.children[idColIdx+offset]?.querySelector('input');
+    if (inp) { const dup=row.ID&&isDuplicateId(row.ID,idx); inp.classList.toggle('dup-warn',!!dup); inp.title=dup?'Дублікат ID':''; }
+  }
+  const portColIdx = COLUMNS.findIndex(c => c.key==='port');
+  if (portColIdx>=0) {
+    const inp = tr.children[portColIdx+offset]?.querySelector('input');
+    if (inp) { const dup=row.port&&isDuplicatePort(row.port,row.ADRES,idx); inp.classList.toggle('dup-warn',!!dup); inp.title=dup?'Цей порт вже на цій адресі':''; }
+  }
+  tr.className = [rowClass(row), selected.has(idx)?'row-selected':''].filter(Boolean).join(' ');
+  const launchBtn = tr.querySelector('.btn-launch');
+  if (launchBtn) { const ready=isReady(row); launchBtn.disabled=!ready; launchBtn.title=ready?'Перенести в ZAP':'Заповніть всі галочки (включно ТМК), Канал та Date of sending SLO'; }
+  updateSummary();
+}
+
+// ===== ROW ACTIONS =====
+function addRow() {
+  const empty = { __meta:{ created:todayISO(), modified:todayISO(), launchedAt:null } };
+  COLUMNS.forEach(c => {
+    if (c.type==='check') empty[c.key]=false;
+    else if (c.type==='date'&&c.today) empty[c.key]=todayISO();
+    else empty[c.key]='';
+  });
+  sheets[currentSheet].push(empty);
+  logAction('add', '(новий)', `на аркуші ${currentSheet}`);
+  saveSheetToDB(currentSheet).catch(()=>{});
+  render(); updateUI();
+}
+
+function duplicateRow(idx) {
+  const rows = sheets[currentSheet];
+  if (!rows[idx]) return;
+  const copy = JSON.parse(JSON.stringify(rows[idx]));
+  copy.ID = '';
+  copy.__meta = { created:todayISO(), modified:todayISO(), launchedAt:null };
+  rows.splice(idx+1,0,copy);
+  logAction('duplicate', rows[idx].ID||'(без ID)', 'дублікат створено');
+  saveSheetToDB(currentSheet).catch(()=>{});
+  render();
+}
+
+function deleteRow(idx) {
+  if (!confirm('Видалити рядок?')) return;
+  const rows = sheets[currentSheet];
+  const id = rows[idx]?.ID||'(без ID)';
+  rows.splice(idx,1);
+  selected.delete(idx);
+  logAction('delete', id, `видалено з ${currentSheet}`);
+  saveSheetToDB(currentSheet).catch(()=>{});
+  render(); updateUI();
+}
+
+function launchRow(idx) {
+  const row = sheets.active[idx];
+  if (!row||!isReady(row)) return;
+  if (!row.__meta) row.__meta = {};
+  row.__meta.launchedAt = todayISO();
+  sheets.zap.push(row);
+  sheets.active.splice(idx,1);
+  selected.delete(idx);
+  logAction('launch', row.ID||'(без ID)', '→ ZAP запущено');
+  dbPutAll('atm', sheets.active).catch(()=>{});
+  dbPutAll('zap', sheets.zap).catch(()=>{});
+  render(); updateUI();
+}
+
+function returnRow(idx) {
+  const row = sheets.zap[idx];
+  if (!row) return;
+  if (row.__meta) row.__meta.launchedAt = null;
+  sheets.active.push(row);
+  sheets.zap.splice(idx,1);
+  logAction('return', row.ID||'(без ID)', 'ZAP → Активні');
+  dbPutAll('atm', sheets.active).catch(()=>{});
+  dbPutAll('zap', sheets.zap).catch(()=>{});
+  render(); updateUI();
+}
+
+// ===== BULK =====
+function toggleSelect(idx, on) { if (on) selected.add(idx); else selected.delete(idx); render(); }
+function toggleAll(on) { selected.clear(); if (on) getFilteredIndices().forEach(i=>selected.add(i)); render(); }
+function clearSelection() { selected.clear(); render(); }
+function updateBulkBar() {
+  document.getElementById('bulkCount').textContent = `${selected.size} вибрано`;
+  document.getElementById('bulkBar').classList.toggle('show', selected.size>0 && currentSheet==='active');
+}
+function bulkLaunch() {
+  const idxs = [...selected].sort((a,b)=>b-a);
+  let count = 0;
+  idxs.forEach(i => {
+    const row = sheets.active[i];
+    if (row&&isReady(row)) {
+      if (!row.__meta) row.__meta={};
+      row.__meta.launchedAt = todayISO();
+      sheets.zap.push(row);
+      sheets.active.splice(i,1);
+      count++;
+    }
+  });
+  logAction('bulk-launch', '', `${count} рядків → ZAP`);
+  dbPutAll('atm', sheets.active).catch(()=>{});
+  dbPutAll('zap', sheets.zap).catch(()=>{});
+  selected.clear(); render(); updateUI();
+  if (count===0) alert('Жоден з вибраних не готовий до запуску');
+}
+function bulkCheck(field) {
+  [...selected].forEach(i => {
+    if (sheets.active[i]) {
+      sheets.active[i][field] = true;
+      if (sheets.active[i].__meta) sheets.active[i].__meta.modified = todayISO();
+    }
+  });
+  logAction('bulk-check', '', `${field}=true для ${selected.size} рядків`);
+  saveSheetToDB('active').catch(()=>{});
+  render();
+}
+function bulkDelete() {
+  if (!confirm(`Видалити ${selected.size} рядків?`)) return;
+  [...selected].sort((a,b)=>b-a).forEach(i=>sheets.active.splice(i,1));
+  logAction('bulk-delete', '', `${selected.size} рядків видалено`);
+  saveSheetToDB('active').catch(()=>{});
+  selected.clear(); render(); updateUI();
+}
+
+// ===== SORT =====
+function toggleSort(key) {
+  if (sortBy===key) { if (sortDir===1) sortDir=-1; else { sortBy=null; sortDir=1; } }
+  else { sortBy=key; sortDir=1; }
+  render();
+}
+
+// ===== SUMMARY / UI =====
+function updateSummary() {
+  const sm = document.getElementById('summary');
+  if (sheets.active.length===0 && sheets.zap.length===0) { sm.style.display='none'; return; }
+  sm.style.display='flex';
+  // Визначаємо вибраний FIO-фільтр
+  const fioFilter = document.getElementById('fioFilter')?.value || '';
+  // Якщо FIO вибрано — фільтруємо, якщо ні — всі
+  const activeRows = fioFilter
+    ? sheets.active.filter(r => r.FIO === fioFilter)
+    : sheets.active;
+  const zapRows = fioFilter
+    ? sheets.zap.filter(r => r.FIO === fioFilter)
+    : sheets.zap;
+  const total = activeRows.length; // тільки в роботі (без ZAP)
+  const readyRows = activeRows.filter(isReady);
+  const overdue = activeRows.filter(isOverdue).length;
+  const soon = activeRows.filter(isSoon).length;
+  const launched = zapRows.length;
+  const scopeLabel = fioFilter ? ` · ${fioFilter}` : '';
+  sm.innerHTML = `
+    <div class="stat"><div class="stat-label">В роботі${scopeLabel}</div><div class="stat-value">${total}</div></div>
+    <div class="stat ok"><div class="stat-label">Готові до запуску</div><div class="stat-value">${readyRows.length}</div></div>
+    <div class="stat soft"><div class="stat-label">Дедлайн ≤ 10 робочих днів</div><div class="stat-value">${soon}</div></div>
+    <div class="stat warn"><div class="stat-label">Прострочені (&gt;10 роб. днів)</div><div class="stat-value">${overdue}</div></div>
+    <div class="stat"><div class="stat-label">Запущено (ZAP)</div><div class="stat-value">${launched}</div></div>`;
+}
+
+function updateUI() {
+  document.getElementById('exportBtn').disabled = false;
+  document.getElementById('addRowBtn').disabled = false;
+  document.getElementById('reportBtn').disabled = false;
+  document.getElementById('filters').style.display = 'flex';
+  document.getElementById('tabs').style.display = 'flex';
+  document.getElementById('hotkeysHint').style.display = 'block';
+  ['Active','Zap'].forEach(n => {
+    document.getElementById('tab'+n).classList.toggle('active', currentSheet===n.toLowerCase());
+  });
+  document.getElementById('tabActive').textContent = `Активні (${sheets.active.length})`;
+  document.getElementById('tabZap').textContent = `ZAP — запущені (${sheets.zap.length})`;
+  document.getElementById('info').textContent = `Аркуш: ${currentSheet} · Видно: ${getFilteredIndices().length} · Збережено в базі`;
+}
+
+function switchSheet(name) {
+  currentSheet = name;
+  selected.clear(); sortBy = null;
+  render(); updateUI();
+}
+
+function resetFilters() {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('fioFilter').value = '';
+  document.getElementById('statusFilter').value = '';
+  render();
+}
+
+// ===== LOGGING =====
+function logAction(action, atmId, details, userOverride) {
+  const user = userOverride || currentUser || 'unknown';
+  const userInfo = USERS[user];
+  const entry = {
+    time: nowTS(),
+    timeISO: new Date().toISOString(),
+    user: user,
+    userFio: userInfo ? userInfo.fio : user,
+    action: action,
+    atmId: atmId || '—',
+    details: details || '',
+    computer: getMachineName(),
+    browser: getBrowserInfo()
+  };
+  dbAddLog(entry);
+}
+
+// ===== LOG VIEWER =====
+async function showLog() {
+  if (currentUser !== 'PavelkoOV') { alert('Перегляд журналу доступний лише для Павелко О.В.'); return; }
+  try {
+    const allLogs = await sbGet('atm_log', 'order=id.desc&limit=500');
+    allLogs.forEach(e => { e.time=e.log_time||''; e.user=e.login||''; e.userFio=e.user_fio||''; e.atmId=e.atm_id||''; });
+    const actionColors = {
+      'login':'log-action-login','logout':'log-action-login',
+      'edit':'log-action-edit','add':'log-action-add',
+      'delete':'log-action-delete','bulk-delete':'log-action-delete',
+      'launch':'log-action-launch','bulk-launch':'log-action-launch',
+      'return':'log-action-return',
+      'import':'log-action-import','export':'log-action-export',
+      'sync':'log-action-import','duplicate':'log-action-edit',
+      'bulk-check':'log-action-edit'
+    };
+    const rows = allLogs.slice(0,500).map(e =>
+      `<tr>
+        <td style="white-space:nowrap;font-size:11px">${escapeHtml(e.time||'')}</td>
+        <td><strong>${escapeHtml(e.userFio||e.user||'')}</strong></td>
+        <td class="${actionColors[e.action]||''}">${escapeHtml(e.action||'')}</td>
+        <td style="font-family:monospace">${escapeHtml(e.atmId||'—')}</td>
+        <td>${escapeHtml(e.details||'')}</td>
+        <td style="font-size:11px;color:#57534e">${escapeHtml(e.computer||'')}</td>
+        <td style="font-size:11px;color:#57534e">${escapeHtml(e.browser||'')}</td>
+      </tr>`
+    ).join('');
+    const html2 = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h2 style="margin:0">📋 Журнал дій <span style="font-size:13px;font-weight:normal;color:#57534e">(${allLogs.length} записів)</span></h2>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="exportLogXlsx()">📥 Завантажити XLSX</button>
+          <button class="btn" onclick="clearLog()">🗑 Очистити</button>
+          <button class="btn btn-primary" onclick="closeModal()">Закрити</button>
+        </div>
+      </div>
+      <div style="overflow:auto;max-height:calc(85vh - 80px)">
+      <table class="log-table">
+        <thead><tr>
+          <th>Час</th><th>Користувач</th><th>Дія</th><th>ATM ID</th><th>Деталі</th><th>Комп'ютер</th><th>Браузер</th>
+        </tr></thead>
+        <tbody>${rows||'<tr><td colspan="7" style="text-align:center;padding:20px;color:#57534e">Журнал порожній</td></tr>'}</tbody>
+      </table>
+      </div>`;
+    document.getElementById('modalContent').innerHTML = html2;
+    document.getElementById('modal').classList.add('show');
+  } catch(e) { alert('Помилка: ' + e.message); }
+}
+
+async function exportLogXlsx() {
+  try {
+    const allLogs = await sbGet('atm_log', 'order=id.desc&limit=5000');
+    const logRows = allLogs.map(e => ({
+      'Час': e.log_time||'', 'Логін': e.login||'', 'ПІБ': e.user_fio||'',
+      'Дія': e.action||'', 'ATM ID': e.atm_id||'', 'Деталі': e.details||'',
+      "Комп'ютер": e.computer||'', 'Браузер': e.browser||''
+    }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(logRows), 'Журнал');
+    XLSX.writeFile(wb, `atm_log_${todayISO()}.xlsx`);
+    logAction('export','—',`Журнал: ${logRows.length} записів`);
+  } catch(e) { alert('Помилка: ' + e.message); }
+}
+
+async function clearLog() {
+  if (!confirm('Очистити весь журнал дій? Цю дію не можна скасувати.')) return;
+  await sbDelete('atm_log', 'id=gte.0');
+  logAction('clear-log','—','Журнал очищено');
+  closeModal();
+  setTimeout(showLog, 200);
+}
+
+// ===== REPORT =====
+function getWaitingPort() { return sheets.active.filter(r => r['Date Start'] && !r.port); }
+function showReport() {
+  const ready=sheets.active.filter(isReady).length;
+  const pending=sheets.active.filter(isPending).length;
+  const launched=sheets.zap.length;
+  const byFio={};
+  [...sheets.active,...sheets.zap].forEach(r => {
+    const f=r.FIO||'(не вказано)';
+    if (!byFio[f]) byFio[f]={total:0,launched:0,pending:0};
+    byFio[f].total++;
+    if (sheets.zap.includes(r)) byFio[f].launched++;
+    else if (isPending(r)) byFio[f].pending++;
+  });
+  const weekAgo=new Date(); weekAgo.setDate(weekAgo.getDate()-7);
+  const launchedWeek=sheets.zap.filter(r=>{ const d=r.__meta?.launchedAt; return d&&new Date(d)>=weekAgo; }).length;
+  const waitingPort=getWaitingPort();
+  const max=Math.max(pending,ready,launched,1);
+  const html=`
+    <h2>📊 Звіт</h2>
+    <h3 style="margin:16px 0 8px;font-size:13px">Воронка</h3>
+    <div class="funnel-row"><span>Незавершені</span><span><b>${pending}</b></span></div>
+    <div class="bar" style="width:${pending/max*100}%;background:#b45309"></div>
+    <div class="funnel-row"><span>Готові до запуску</span><span><b>${ready}</b></span></div>
+    <div class="bar" style="width:${ready/max*100}%"></div>
+    <div class="funnel-row"><span>Запущено</span><span><b>${launched}</b></span></div>
+    <div class="bar" style="width:${launched/max*100}%;background:var(--ok)"></div>
+    <div class="funnel-row"><span>Запущено за тиждень</span><span><b>${launchedWeek}</b></span></div>
+    <h3 style="margin:16px 0 8px;font-size:13px">По FIO</h3>
+    ${Object.entries(byFio).sort((a,b)=>b[1].total-a[1].total).map(([f,s])=>
+      `<div class="funnel-row"><span>${escapeHtml(f)}</span><span>всього:<b>${s.total}</b> · запущ.:<b>${s.launched}</b> · в роботі:<b>${s.pending}</b></span></div>`).join('')}
+    <h3 style="margin:16px 0 8px;font-size:13px">Чекають порт</h3>
+    ${waitingPort.length===0
+      ? `<div style="padding:8px 12px;color:var(--text-muted)">Немає таких заявок</div>`
+      : `<table style="width:100%;font-size:12px;border-collapse:collapse">
+          <thead><tr style="border-bottom:2px solid var(--border-strong);background:#f5f5f4">
+            <th style="text-align:left;padding:6px 8px">ID</th><th style="text-align:left;padding:6px 8px">ADRES</th>
+            <th style="text-align:left;padding:6px 8px">Old ATM</th><th style="text-align:left;padding:6px 8px">Date Start</th>
+          </tr></thead><tbody>
+          ${waitingPort.map(r=>`<tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:5px 8px;font-family:monospace">${escapeHtml(r.ID)}</td>
+            <td style="padding:5px 8px">${escapeHtml(r.ADRES)}</td>
+            <td style="padding:5px 8px">${escapeHtml(r['Old ATM'])}</td>
+            <td style="padding:5px 8px">${fmtDateUk(r['Date Start'])}</td>
+          </tr>`).join('')}
+          </tbody></table>`}
+    <div style="margin-top:16px;text-align:right">
+      <button class="btn" onclick="exportReportCsv()">Зведення CSV</button>
+      <button class="btn btn-primary" onclick="closeModal()">Закрити</button>
+    </div>`;
+  document.getElementById('modalContent').innerHTML = html;
+  document.getElementById('modal').classList.add('show');
+}
+function closeModal() { document.getElementById('modal').classList.remove('show'); }
+
+// ===== EXPORT EXCEL =====
+function exportExcel() {
+  const wb = XLSX.utils.book_new();
+  const headers = COLUMNS.map(c=>c.key);
+  const fullHeaders = [...headers,'__created','__modified','__launched'];
+  const buildSheet = (rows,includeMeta) => rows.map(r => {
+    const o={};
+    COLUMNS.forEach(col => {
+      let v=r[col.key];
+      if (col.type==='check') v=v?1:'';
+      else if (col.type==='date') v=fmtDateUk(v);
+      else if (col.type==='status') v=stripHtml(computeStatus(r));
+      else if (col.type==='note') v=v||'';
+      o[col.key]=v;
+    });
+    if (includeMeta) {
+      o['__created']=fmtDateUk(r.__meta?.created);
+      o['__modified']=fmtDateUk(r.__meta?.modified);
+      if (r.__meta?.launchedAt) o['__launched']=fmtDateUk(r.__meta.launchedAt);
+    }
+    return o;
+  });
+  if (sheets.active.length>0) XLSX.utils.book_append_sheet(wb,
+    XLSX.utils.json_to_sheet(buildSheet(sheets.active,true),{header:fullHeaders}),'ATM');
+  if (sheets.zap.length>0) XLSX.utils.book_append_sheet(wb,
+    XLSX.utils.json_to_sheet(buildSheet(sheets.zap,true),{header:fullHeaders}),'ZAP');
+  // Лист журналу в Excel
+  if (db) {
+    dbGetAll('log').then(logs => {
+      logs.sort((a,b)=>new Date(b.timeISO||0)-new Date(a.timeISO||0));
+      const logRows=allLogs.map(e=>({'Час':e.log_time||'','Логін':e.login||'','ПІБ':e.user_fio||'','Дія':e.action||'','ATM ID':e.atm_id||'','Деталі':e.details||'',"Комп'ютер":e.computer||'','Браузер':e.browser||''}));
+      if (logRows.length>0) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(logRows),'Журнал');
+      if (wb.SheetNames.length===0) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet([],{header:headers}),'ATM');
+      XLSX.writeFile(wb,`atm_export_${todayISO()}.xlsx`);
+      logAction('export','—',`ATM=${sheets.active.length}, ZAP=${sheets.zap.length}`);
+    });
+  } else {
+    if (wb.SheetNames.length===0) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet([],{header:headers}),'ATM');
+    XLSX.writeFile(wb,`atm_export_${todayISO()}.xlsx`);
+    logAction('export','—',`ATM=${sheets.active.length}, ZAP=${sheets.zap.length}`);
+  }
+}
+
+function exportReportCsv() {
+  const byFio={};
+  [...sheets.active,...sheets.zap].forEach(r=>{
+    const f=r.FIO||'(не вказано)';
+    if (!byFio[f]) byFio[f]={total:0,launched:0,pending:0};
+    byFio[f].total++;
+    if (sheets.zap.includes(r)) byFio[f].launched++;
+    else if (isPending(r)) byFio[f].pending++;
+  });
+  const rows=[['FIO','Всього','Запущено','В роботі']];
+  Object.entries(byFio).forEach(([f,s])=>rows.push([f,s.total,s.launched,s.pending]));
+  const csv=rows.map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`report_${todayISO()}.csv`; a.click();
+}
+
+// ===== HOTKEYS =====
+function handleHotkey(e) {
+  if ((e.ctrlKey||e.metaKey)&&e.key==='s') { e.preventDefault(); exportExcel(); return; }
+  if ((e.ctrlKey||e.metaKey)&&e.key==='d'&&currentSheet==='active') {
+    const tr=e.target.closest('tr');
+    if (tr) {
+      e.preventDefault();
+      const tbody=tr.parentElement;
+      const visIdx=[...tbody.children].indexOf(tr);
+      const realIdx=getFilteredIndices()[visIdx];
+      if (realIdx!==undefined) duplicateRow(realIdx);
+    }
+  }
+}
+
+// ===== UTILS =====
+function escapeHtml(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function escapeAttr(s){return String(s??'').replace(/"/g,'&quot;');}
+function stripHtml(s){const d=document.createElement('div');d.innerHTML=s;return d.textContent||'';}
+
+// ===== СТАРТ =====
+(async function preloadData() {
+  const ok = await initDB();
+  if (ok) {
+    await loadFromDB();
+  } else {
+    loadSeedData();
+    rebuildFilters(); render(); updateUI();
+  }
+})();
+</script>
+</body>
+</html>
