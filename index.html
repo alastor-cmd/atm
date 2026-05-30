@@ -54,6 +54,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .user-badge strong{background:rgba(255,255,255,.2);padding:3px 10px;border-radius:20px;}
 .btn-logout{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-family:inherit;}
 .btn-logout:hover{background:rgba(255,255,255,.25);}
+.btn-change-pwd{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-family:inherit;margin-right:8px;}
+.btn-change-pwd:hover{background:rgba(255,255,255,.25);}
 
 /* ===== HEADER ===== */
 #appHeader{background:var(--accent);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;}
@@ -211,6 +213,7 @@ td.meta-cell{font-size:10px;color:var(--text-muted);white-space:nowrap;}
   <span class="db-status" id="dbStatus">● Завантаження...</span>
   <div class="user-badge">
     <strong id="headerUser"></strong>
+    <button class="btn-change-pwd" id="changePwdBtn" onclick="showChangePwd()" style="display:none">🔑 Змінити пароль</button>
     <button class="btn-logout" onclick="doLogout()">Вийти</button>
   </div>
 </div>
@@ -379,10 +382,11 @@ function loginSuccess(login) {
   document.getElementById('appPage').style.display = 'block';
   document.getElementById('headerUser').textContent = USERS[login].full;
   const isPavelko = login === 'PavelkoOV';
-  document.getElementById('logBtn').style.display     = isPavelko ? '' : 'none';
-  document.getElementById('importBtn').style.display  = isPavelko ? '' : 'none';
-  document.getElementById('updateDbBtn').style.display= isPavelko ? '' : 'none';
-  document.getElementById('profilesBtn').style.display= isPavelko ? '' : 'none';
+  document.getElementById('logBtn').style.display      = isPavelko ? '' : 'none';
+  document.getElementById('importBtn').style.display   = isPavelko ? '' : 'none';
+  document.getElementById('updateDbBtn').style.display = isPavelko ? '' : 'none';
+  document.getElementById('profilesBtn').style.display = isPavelko ? '' : 'none';
+  document.getElementById('changePwdBtn').style.display= isPavelko ? 'none' : '';
   logAction('login', '—', 'Вхід у систему', login);
   if (sheets.active.length > 0 || sheets.zap.length > 0) {
     rebuildFilters(); render(); updateUI();
@@ -1591,6 +1595,88 @@ async function sbUpsertSetting(login, data) {
     await sbPost('atm_settings', { login, ...data });
   }
   await loadUserSettings();
+}
+
+// ===== ЗМІНА ПАРОЛЯ (для звичайних користувачів) =====
+async function showChangePwd() {
+  const login = currentUser;
+  const info = USERS[login];
+  const s = userSettings[login] || {};
+  const hasPwd = !!s.pwd_hash;
+
+  document.getElementById('modalContent').innerHTML = `
+    <div style="max-width:380px;margin:0 auto">
+      <h2 style="margin:0 0 4px 0">🔑 Зміна пароля</h2>
+      <p style="color:var(--text-muted);font-size:13px;margin:0 0 20px 0">${escapeHtml(info.full)}</p>
+      ${hasPwd ? `
+      <div class="login-field">
+        <label>Поточний пароль</label>
+        <input type="password" id="cpOldPwd" class="profile-input" placeholder="Введіть поточний пароль">
+      </div>` : `
+      <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:10px 14px;font-size:12px;color:var(--ok);margin-bottom:16px">
+        ℹ️ Пароль ще не встановлено — задайте новий
+      </div>`}
+      <div class="login-field">
+        <label>Новий пароль</label>
+        <input type="password" id="cpNewPwd" class="profile-input" placeholder="Мінімум 4 символи">
+      </div>
+      <div class="login-field">
+        <label>Повторіть новий пароль</label>
+        <input type="password" id="cpNewPwd2" class="profile-input" placeholder="Повторіть пароль">
+      </div>
+      <div id="cpError" style="display:none;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;border-radius:6px;padding:9px 14px;font-size:12px;margin-bottom:12px"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+        <button class="btn" onclick="closeModal()">Скасувати</button>
+        <button class="btn btn-primary" onclick="doChangePwd()">💾 Зберегти пароль</button>
+      </div>
+    </div>`;
+  document.getElementById('modal').classList.add('show');
+  // Фокус на перше поле
+  setTimeout(() => {
+    const f = document.getElementById('cpOldPwd') || document.getElementById('cpNewPwd');
+    if (f) f.focus();
+  }, 100);
+}
+
+async function doChangePwd() {
+  const login = currentUser;
+  const s = userSettings[login] || {};
+  const hasPwd = !!s.pwd_hash;
+  const errEl = document.getElementById('cpError');
+  const newPwd = document.getElementById('cpNewPwd')?.value || '';
+  const newPwd2 = document.getElementById('cpNewPwd2')?.value || '';
+
+  const showErr = (msg) => {
+    errEl.textContent = msg;
+    errEl.style.display = 'block';
+  };
+
+  // Перевіряємо поточний пароль
+  if (hasPwd) {
+    const oldPwd = document.getElementById('cpOldPwd')?.value || '';
+    if (!oldPwd) { showErr('Введіть поточний пароль'); return; }
+    const oldHash = await hashPwd(oldPwd);
+    if (oldHash !== s.pwd_hash) { showErr('Поточний пароль невірний'); return; }
+  }
+
+  // Перевіряємо новий пароль
+  if (!newPwd) { showErr('Введіть новий пароль'); return; }
+  if (newPwd.length < 4) { showErr('Мінімум 4 символи'); return; }
+  if (newPwd !== newPwd2) { showErr('Паролі не співпадають'); return; }
+
+  // Зберігаємо
+  const newHash = await hashPwd(newPwd);
+  await sbUpsertSetting(login, { pwd_hash: newHash, bypass: false });
+  logAction('change-pwd', '—', 'Пароль змінено', login);
+  closeModal();
+  // Показуємо підтвердження
+  const btn = document.getElementById('changePwdBtn');
+  if (btn) {
+    const orig = btn.textContent;
+    btn.textContent = '✅ Пароль змінено';
+    btn.style.background = 'rgba(21,128,61,.3)';
+    setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 3000);
+  }
 }
 
 // ===== UTILS =====
