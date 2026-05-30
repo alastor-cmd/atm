@@ -373,7 +373,7 @@ async function quickLogin(login) {
   else loginSuccess(login);
 }
 
-function loginSuccess(login) {
+async function loginSuccess(login) {
   currentUser = login;
   currentUserFio = USERS[login].fio;
   document.getElementById('loginError').classList.remove('show');
@@ -388,9 +388,8 @@ function loginSuccess(login) {
   document.getElementById('profilesBtn').style.display = isPavelko ? '' : 'none';
   document.getElementById('changePwdBtn').style.display= isPavelko ? 'none' : '';
   logAction('login', '—', 'Вхід у систему', login);
-  if (sheets.active.length > 0 || sheets.zap.length > 0) {
-    rebuildFilters(); render(); updateUI();
-  }
+  // Завжди завантажуємо свіжі дані з бази при вході
+  await loadFromDB();
 }
 
 function doLogout() {
