@@ -533,6 +533,7 @@ function rowToSB(row, sheet) {
     bec:           !!row.BEC,
     limi:          !!row.Limi,
     tmk:           !!(row['ТМК']),
+    signalizaciya: !!(row['Сигналізація']),
     port:          row.port            || '',
     date_slo:      row['Date SLO']     || '',
     date_start:    row['Date Start']   || '',
@@ -618,6 +619,7 @@ function deserializeRow(r) {
   row.BEC          = !!r.bec;
   row.Limi         = !!r.limi;
   row['ТМК']       = !!r.tmk;
+  row['Сигналізація'] = !!r.signalizaciya;
   row.port         = r.port        || '';
   row['Date SLO']  = r.date_slo    || '';
   row['Date Start']= r.date_start  || '';
@@ -677,20 +679,21 @@ function loadSeedData() {
 // ===== COLUMNS =====
 const COLUMNS = [
   { key:'ID', label:'ID', type:'alnum', maxLen:10, sortable:true, width:100 },
-  { key:'ADRES', label:'ADRES', type:'alnum', maxLen:64, sortable:true, wrap:true, width:260 },
+  { key:'ADRES', label:'Адреса', type:'alnum', maxLen:64, sortable:true, wrap:true, width:260 },
   { key:'SD', label:'SD', type:'sd', sortable:true, width:140 },
   { key:'date pog', label:'date pog', type:'date', today:true, sortable:true, width:140 },
-  { key:'Org', label:'Org', type:'alnum', maxLen:64, sortable:true, wrap:true, width:240 },
+  { key:'Org', label:'Організація', type:'alnum', maxLen:64, sortable:true, wrap:true, width:240 },
   { key:'Old ATM', label:'Old ATM', type:'alnum', maxLen:10, width:100 },
   { key:'FIO', label:'FIO', type:'select', sortable:true, width:150,
     options:['','Павелко','Даневич','Пількевич','Дембновецький','Стражевський'] },
   { key:'Статус', label:'Статус', type:'status', width:180 },
-  { key:'dogovir', label:'dogovir', type:'check', width:70 },
+  { key:'dogovir', label:'Договір', type:'check', width:70 },
   { key:'Канал', label:'Канал', type:'select', options:['','Провод','4g','ТВБВ'], width:110 },
-  { key:'DIS', label:'DIS', type:'check', width:60 },
-  { key:'BEC', label:'BEC', type:'check', width:60 },
-  { key:'Limi', label:'Limi', type:'check', width:60 },
+  { key:'DIS', label:'Перевезено', type:'check', width:60 },
+  { key:'BEC', label:'Рахунки', type:'check', width:60 },
+  { key:'Limi', label:'Ліміти', type:'check', width:60 },
   { key:'ТМК', label:'ТМК', type:'check', width:65 },
+  { key:'Сигналізація', label:'Сигналізація', type:'check', width:90 },
   { key:'port', label:'port', type:'port', width:80 },
   { key:'Date SLO', label:'Date of sending SLO', type:'date', sortable:true, width:150 },
   { key:'Date Start', label:'Date Start', type:'date', sortable:true, width:140 },
@@ -854,7 +857,7 @@ function sanitizeSD(v) {
 function getMissing(row) {
   const m = [];
   // Усі check-поля включаючи ТМК
-  [...CHECK_COLS, 'ТМК'].forEach(k => { if (!row[k]) m.push(k); });
+  [...CHECK_COLS, 'ТМК', 'Сигналізація'].forEach(k => { if (!row[k]) m.push(k); });
   if (!row['port']) m.push('port');
   if (!row['Канал']) m.push('Канал');
   return m;
