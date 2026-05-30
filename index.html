@@ -16,6 +16,45 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 
 
 
+/* ===== LOGIN PAGE ===== */
+#loginPage{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#1e3a5f 0%,#1e40af 100%);}
+.login-card{background:#fff;border-radius:12px;padding:40px 48px;width:420px;box-shadow:0 20px 60px rgba(0,0,0,0.3);}
+.login-logo{text-align:center;margin-bottom:20px;}
+.login-title{font-size:20px;font-weight:700;text-align:center;margin-bottom:4px;}
+.login-sub{font-size:12px;color:var(--text-muted);text-align:center;margin-bottom:24px;}
+.login-field{margin-bottom:14px;}
+.login-field label{display:block;font-size:11px;font-weight:600;margin-bottom:5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;}
+.login-field input{width:100%;padding:10px 14px;border:1px solid var(--border-strong);border-radius:6px;font-size:14px;font-family:inherit;outline:none;transition:border-color .15s;}
+.login-field input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(30,64,175,.1);}
+.login-btn{width:100%;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:6px;}
+.login-btn:hover{background:var(--accent-hover);}
+.login-error{background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;border-radius:6px;padding:9px 14px;font-size:12px;margin-top:10px;display:none;}
+.login-error.show{display:block;}
+.login-users{margin-top:18px;border-top:1px solid var(--border);padding-top:14px;}
+.login-users-label{font-size:11px;color:var(--text-muted);margin-bottom:8px;text-align:center;}
+.login-user-btn{display:block;width:100%;text-align:left;padding:7px 12px;margin-bottom:5px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;font-size:12px;font-family:inherit;transition:all .15s;}
+.login-user-btn:hover{border-color:var(--accent);background:#eff6ff;color:var(--accent);}
+.login-user-btn span{font-size:11px;color:var(--text-muted);float:right;font-family:monospace;}
+.login-bypass{font-size:11px;color:var(--ok);background:#f0fdf4;border:1px solid #86efac;border-radius:4px;padding:2px 8px;float:right;margin-top:1px;}
+/* Профілі */
+.profiles-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px;}
+.profile-card{border:1px solid var(--border);border-radius:8px;padding:14px;background:#fafaf9;}
+.profile-card h4{margin:0 0 8px 0;font-size:13px;color:var(--text);}
+.profile-card .profile-login{font-family:monospace;font-size:11px;color:var(--text-muted);margin-bottom:10px;}
+.profile-status{font-size:11px;margin-bottom:8px;}
+.profile-status.has-pwd{color:var(--ok);}
+.profile-status.no-pwd{color:#b45309;}
+.profile-input{width:100%;padding:6px 10px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;font-family:inherit;margin-bottom:6px;}
+.profile-btn{padding:5px 10px;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-family:inherit;font-weight:600;}
+.profile-btn-set{background:var(--accent);color:#fff;}
+.profile-btn-bypass{background:var(--ok);color:#fff;margin-left:4px;}
+.profile-btn-revoke{background:#6b7280;color:#fff;margin-left:4px;}
+/* user badge */
+.user-badge{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;}
+.user-badge strong{background:rgba(255,255,255,.2);padding:3px 10px;border-radius:20px;}
+.btn-logout{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-family:inherit;}
+.btn-logout:hover{background:rgba(255,255,255,.25);}
+
 /* ===== HEADER ===== */
 #appHeader{background:var(--accent);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;}
 #appHeader h1{margin:0;font-size:16px;font-weight:600;}
@@ -134,15 +173,50 @@ td.meta-cell{font-size:10px;color:var(--text-muted);white-space:nowrap;}
 
 
 
+<!-- ===== LOGIN PAGE ===== -->
+<div id="loginPage">
+  <div class="login-card">
+    <div class="login-logo">
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none"><rect width="48" height="48" rx="10" fill="#1e40af"/><rect x="10" y="14" width="28" height="20" rx="3" fill="white" opacity="0.9"/><rect x="14" y="22" width="8" height="8" rx="1" fill="#1e40af"/></svg>
+    </div>
+    <div class="login-title">Редактор заявок ATM</div>
+    <div class="login-sub">АТ «Ощадбанк» · Введіть логін для входу</div>
+    <div class="login-field">
+      <label>Логін</label>
+      <input type="text" id="loginInput" placeholder="наприклад: PavelkoOV" autocomplete="off"
+        oninput="onLoginInput()" onkeydown="if(event.key==='Enter')focusOrLogin()">
+    </div>
+    <div id="passwordField" style="display:none" class="login-field">
+      <label>Пароль</label>
+      <input type="password" id="passwordInput" placeholder="••••••••"
+        onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="login-btn" onclick="doLogin()">Увійти</button>
+    <div class="login-error" id="loginError">Невірний логін або пароль.</div>
+    <div class="login-users">
+      <div class="login-users-label">Швидкий вибір</div>
+      <button class="login-user-btn" id="qPavelkoOV" onclick="quickLogin('PavelkoOV')">Павелко Олександр Валентинович <span>PavelkoOV</span></button>
+      <button class="login-user-btn" id="qPilkevichAA" onclick="quickLogin('PilkevichAA')">Пількевич Андрій Анатолійович <span>PilkevichAA</span></button>
+      <button class="login-user-btn" id="qDanevichNS" onclick="quickLogin('DanevichNS')">Даневич Наталія Сергіївна <span>DanevichNS</span></button>
+      <button class="login-user-btn" id="qstrazhevskijoo" onclick="quickLogin('strazhevskijoo')">Стражевський Олексій Олексійович <span>strazhevskijoo</span></button>
+      <button class="login-user-btn" id="qdembnovetskyiiv" onclick="quickLogin('dembnovetskyiiv')">Дембновецький Іван Володимирович <span>dembnovetskyiiv</span></button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== APP HEADER ===== -->
-<div id="appHeader">
+<div id="appHeader" style="display:none">
   <svg width="24" height="24" viewBox="0 0 48 48" fill="none"><rect width="48" height="48" rx="10" fill="rgba(255,255,255,.2)"/><rect x="10" y="14" width="28" height="20" rx="3" fill="white" opacity="0.9"/><rect x="14" y="22" width="8" height="8" rx="1" fill="#1e40af"/></svg>
   <h1>Редактор заявок ATM</h1>
   <span class="db-status" id="dbStatus">● Завантаження...</span>
+  <div class="user-badge">
+    <strong id="headerUser"></strong>
+    <button class="btn-logout" onclick="doLogout()">Вийти</button>
+  </div>
 </div>
 
 <!-- ===== APP PAGE ===== -->
-<div id="appPage" style="display:block">
+<div id="appPage" style="display:none">
   <div class="toolbar">
     <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls">
     <button class="btn" id="importBtn" onclick="document.getElementById('fileInput').click()" style="display:none">📥 Імпорт Excel</button>
@@ -152,6 +226,7 @@ td.meta-cell{font-size:10px;color:var(--text-muted);white-space:nowrap;}
     <button class="btn" id="addRowBtn" onclick="addRow()" disabled>+ Рядок</button>
     <button class="btn" id="reportBtn" onclick="showReport()" disabled>📊 Звіт</button>
     <button class="btn btn-log" id="logBtn" onclick="showLog()">📋 Журнал дій</button>
+    <button class="btn" id="profilesBtn" onclick="showProfiles()" style="display:none;background:#6d28d9;color:#fff;border-color:#6d28d9">👥 Профілі</button>
     <span style="margin-left:auto;color:var(--text-muted);font-size:12px;" id="info">Завантаження...</span>
   </div>
 
@@ -214,8 +289,118 @@ const USERS = {
 };
 
 // ===== SESSION =====
-let currentUser = 'admin';
+let currentUser = null;
 let currentUserFio = '';
+
+// Паролі та bypass завантажуються з Supabase (таблиця atm_settings)
+// Формат: { login: { pwd_hash: '...', bypass: false } }
+let userSettings = {};
+
+// Проста hash функція (не криптографічна, але достатня для внутрішнього інструменту)
+async function hashPwd(pwd) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pwd + 'atm_tbs_salt'));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+async function loadUserSettings() {
+  try {
+    const rows = await sbGet('atm_settings', 'select=login,pwd_hash,bypass');
+    userSettings = {};
+    rows.forEach(r => { userSettings[r.login] = { pwd_hash: r.pwd_hash||'', bypass: !!r.bypass }; });
+  } catch(e) {
+    // Таблиця може не існувати ще — тихо ігноруємо
+    userSettings = {};
+  }
+  // Оновлюємо кнопки швидкого входу (показуємо bypass)
+  Object.entries(USERS).forEach(([login]) => {
+    const s = userSettings[login];
+    const btn = document.getElementById('q'+login);
+    if (!btn) return;
+    const old = btn.querySelector('.login-bypass');
+    if (old) old.remove();
+    if (s?.bypass) {
+      const tag = document.createElement('span');
+      tag.className = 'login-bypass'; tag.textContent = 'без пароля';
+      btn.appendChild(tag);
+    }
+  });
+}
+
+async function onLoginInput() {
+  const login = document.getElementById('loginInput').value.trim();
+  const s = userSettings[login];
+  const hasPwd = s?.pwd_hash && !s?.bypass;
+  document.getElementById('passwordField').style.display = hasPwd ? 'block' : 'none';
+  document.getElementById('loginError').classList.remove('show');
+}
+
+function focusOrLogin() {
+  const login = document.getElementById('loginInput').value.trim();
+  const s = userSettings[login];
+  const hasPwd = s?.pwd_hash && !s?.bypass;
+  if (hasPwd) document.getElementById('passwordInput').focus();
+  else doLogin();
+}
+
+async function doLogin() {
+  const login = document.getElementById('loginInput').value.trim();
+  if (!USERS[login]) {
+    document.getElementById('loginError').textContent = 'Невідомий логін.';
+    document.getElementById('loginError').classList.add('show'); return;
+  }
+  const s = userSettings[login];
+  const hasPwd = s?.pwd_hash && !s?.bypass;
+  if (hasPwd) {
+    const pwd = document.getElementById('passwordInput').value;
+    const hash = await hashPwd(pwd);
+    if (hash !== s.pwd_hash) {
+      document.getElementById('loginError').textContent = 'Невірний пароль.';
+      document.getElementById('loginError').classList.add('show'); return;
+    }
+  }
+  loginSuccess(login);
+}
+
+async function quickLogin(login) {
+  document.getElementById('loginInput').value = login;
+  await onLoginInput();
+  const s = userSettings[login];
+  const hasPwd = s?.pwd_hash && !s?.bypass;
+  if (hasPwd) { document.getElementById('passwordInput').focus(); }
+  else loginSuccess(login);
+}
+
+function loginSuccess(login) {
+  currentUser = login;
+  currentUserFio = USERS[login].fio;
+  document.getElementById('loginError').classList.remove('show');
+  document.getElementById('loginPage').style.display = 'none';
+  document.getElementById('appHeader').style.display = 'flex';
+  document.getElementById('appPage').style.display = 'block';
+  document.getElementById('headerUser').textContent = USERS[login].full;
+  const isPavelko = login === 'PavelkoOV';
+  document.getElementById('logBtn').style.display     = isPavelko ? '' : 'none';
+  document.getElementById('importBtn').style.display  = isPavelko ? '' : 'none';
+  document.getElementById('updateDbBtn').style.display= isPavelko ? '' : 'none';
+  document.getElementById('profilesBtn').style.display= isPavelko ? '' : 'none';
+  logAction('login', '—', 'Вхід у систему', login);
+  if (sheets.active.length > 0 || sheets.zap.length > 0) {
+    rebuildFilters(); render(); updateUI();
+  }
+}
+
+function doLogout() {
+  logAction('logout','—','Вихід із системи', currentUser);
+  currentUser = null; currentUserFio = '';
+  sheets = { active:[], zap:[] };
+  document.getElementById('loginPage').style.display = 'flex';
+  document.getElementById('appHeader').style.display = 'none';
+  document.getElementById('appPage').style.display = 'none';
+  document.getElementById('loginInput').value = '';
+  document.getElementById('passwordInput').value = '';
+  document.getElementById('passwordField').style.display = 'none';
+  document.getElementById('tableWrap').innerHTML = '<div class="empty-state"><p>Завантаження...</p></div>';
+}
 
 function getHostname() {
   try { return window.location.hostname || 'local'; } catch(e) { return 'unknown'; }
@@ -1326,6 +1511,88 @@ function handleHotkey(e) {
   }
 }
 
+// ===== PROFILES (admin) =====
+async function showProfiles() {
+  if (currentUser !== 'PavelkoOV') return;
+  await loadUserSettings();
+
+  const rows = Object.entries(USERS).map(([login, info]) => {
+    const s = userSettings[login] || {};
+    const hasPwd = !!s.pwd_hash;
+    const bypass = !!s.bypass;
+    const statusHtml = bypass
+      ? '<span style="color:var(--ok);font-size:11px">✓ Вхід без пароля</span>'
+      : hasPwd
+        ? '<span style="color:var(--info);font-size:11px">🔒 Пароль встановлено</span>'
+        : '<span style="color:#b45309;font-size:11px">⚠ Пароль не встановлено</span>';
+    return `
+      <div class="profile-card">
+        <h4>${escapeHtml(info.full)}</h4>
+        <div class="profile-login">${login}</div>
+        <div style="margin-bottom:8px">${statusHtml}</div>
+        <input class="profile-input" id="pwd_${login}" type="password" placeholder="Новий пароль">
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          <button class="profile-btn profile-btn-set" onclick="adminSetPwd('${login}')">💾 Зберегти пароль</button>
+          ${bypass
+            ? `<button class="profile-btn profile-btn-revoke" onclick="adminSetBypass('${login}',false)">🔒 Скасувати bypass</button>`
+            : `<button class="profile-btn profile-btn-bypass" onclick="adminSetBypass('${login}',true)">🔓 Вхід без пароля</button>`
+          }
+          ${hasPwd ? `<button class="profile-btn" style="background:#ef4444;color:#fff" onclick="adminClearPwd('${login}')">✕ Видалити пароль</button>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('modalContent').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="margin:0">👥 Управління користувачами</h2>
+      <button class="btn btn-primary" onclick="closeModal()">Закрити</button>
+    </div>
+    <div class="profiles-grid">${rows}</div>`;
+  document.getElementById('modal').classList.add('show');
+}
+
+async function adminSetPwd(login) {
+  const pwd = document.getElementById('pwd_' + login)?.value?.trim();
+  if (!pwd) { alert('Введіть пароль'); return; }
+  if (pwd.length < 4) { alert('Мінімум 4 символи'); return; }
+  const hash = await hashPwd(pwd);
+  await sbUpsertSetting(login, { pwd_hash: hash, bypass: false });
+  document.getElementById('pwd_' + login).value = '';
+  alert(`✅ Пароль для ${login} встановлено`);
+  showProfiles();
+}
+
+async function adminSetBypass(login, bypass) {
+  const s = userSettings[login] || {};
+  await sbUpsertSetting(login, { pwd_hash: s.pwd_hash||'', bypass });
+  logAction('admin', login, bypass ? 'Bypass увімкнено' : 'Bypass вимкнено');
+  alert(bypass ? `✅ ${login} може входити без пароля` : `🔒 Bypass скасовано для ${login}`);
+  showProfiles();
+}
+
+async function adminClearPwd(login) {
+  if (!confirm(`Видалити пароль для ${login}?`)) return;
+  await sbUpsertSetting(login, { pwd_hash: '', bypass: false });
+  logAction('admin', login, 'Пароль видалено');
+  showProfiles();
+}
+
+async function sbUpsertSetting(login, data) {
+  // Спочатку пробуємо UPDATE
+  const existing = await sbGet('atm_settings', `login=eq.${login}`);
+  if (existing.length > 0) {
+    await fetch(`${SB_URL}/rest/v1/atm_settings?login=eq.${login}`, {
+      method: 'PATCH',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer '+SB_KEY,
+                 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify(data)
+    });
+  } else {
+    await sbPost('atm_settings', { login, ...data });
+  }
+  await loadUserSettings();
+}
+
 // ===== UTILS =====
 function escapeHtml(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function escapeAttr(s){return String(s??'').replace(/"/g,'&quot;');}
@@ -1335,7 +1602,7 @@ function stripHtml(s){const d=document.createElement('div');d.innerHTML=s;return
 (async function preloadData() {
   const ok = await initDB();
   if (ok) {
-    await loadFromDB();
+    await Promise.all([loadFromDB(), loadUserSettings()]);
   } else {
     loadSeedData();
     rebuildFilters(); render(); updateUI();
