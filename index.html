@@ -178,7 +178,7 @@ td.meta-cell{font-size:10px;color:var(--text-muted);white-space:nowrap;}
 
 
 <!-- ===== LOGIN PAGE ===== -->
-<div id="loginPage">
+<div id="loginPage" style="display:none">
   <div class="login-card">
     <div class="login-logo">
       <svg width="48" height="48" viewBox="0 0 48 48" fill="none"><rect width="48" height="48" rx="10" fill="#1e40af"/><rect x="10" y="14" width="28" height="20" rx="3" fill="white" opacity="0.9"/><rect x="14" y="22" width="8" height="8" rx="1" fill="#1e40af"/></svg>
@@ -375,9 +375,11 @@ async function quickLogin(login) {
   else loginSuccess(login);
 }
 
-async function loginSuccess(login) {
+async function loginSuccess(login, silent) {
   currentUser = login;
   currentUserFio = USERS[login].fio;
+  // Зберігаємо сесію в localStorage
+  localStorage.setItem('atm_session', login);
   document.getElementById('loginError').classList.remove('show');
   document.getElementById('loginPage').style.display = 'none';
   document.getElementById('appHeader').style.display = 'flex';
@@ -389,13 +391,13 @@ async function loginSuccess(login) {
   document.getElementById('updateDbBtn').style.display = isPavelko ? '' : 'none';
   document.getElementById('profilesBtn').style.display = isPavelko ? '' : 'none';
   document.getElementById('changePwdBtn').style.display= isPavelko ? 'none' : '';
-  logAction('login', '—', 'Вхід у систему', login);
-  // Завжди завантажуємо свіжі дані з бази при вході
+  if (!silent) logAction('login', '—', 'Вхід у систему', login);
   await loadFromDB();
 }
 
 function doLogout() {
   logAction('logout','—','Вихід із системи', currentUser);
+  localStorage.removeItem('atm_session');
   currentUser = null; currentUserFio = '';
   sheets = { active:[], zap:[] };
   document.getElementById('loginPage').style.display = 'flex';
@@ -1743,10 +1745,20 @@ function stripHtml(s){const d=document.createElement('div');d.innerHTML=s;return
 (async function preloadData() {
   const ok = await initDB();
   if (ok) {
-    await Promise.all([loadFromDB(), loadUserSettings()]);
+    await loadUserSettings();
+    // Перевіряємо збережену сесію
+    const savedLogin = localStorage.getItem('atm_session');
+    if (savedLogin && USERS[savedLogin]) {
+      // Відновлюємо сесію без повторного логіну
+      await loginSuccess(savedLogin, true);
+    } else {
+      // Показуємо сторінку логіну
+      document.getElementById('loginPage').style.display = 'flex';
+    }
   } else {
     loadSeedData();
     rebuildFilters(); render(); updateUI();
+    document.getElementById('loginPage').style.display = 'flex';
   }
 })();
 </script>
