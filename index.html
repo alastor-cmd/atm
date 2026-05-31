@@ -124,6 +124,8 @@ td.checkbox-cell{text-align:center;width:56px;}
 td input[type="checkbox"]{width:16px;height:16px;cursor:pointer;accent-color:var(--accent);}
 td.status-cell{font-weight:500;white-space:nowrap;text-align:center;font-size:11px;}
 .status-missing{color:var(--warn);}
+.type-atm{background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;}
+.type-ipt{background:#f3e8ff;color:#6d28d9;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;}
 .status-ready{color:var(--ok);font-size:12px;}
 .status-pending{color:#b45309;}
 td.col-port input,td.col-date input,td.col-id input,td.col-sd input,td input,td select{box-sizing:border-box;}
@@ -534,6 +536,8 @@ function rowToSB(row, sheet) {
     limi:          !!row.Limi,
     tmk:           !!(row['ТМК']),
     signalizaciya: !!(row['Сигналізація']),
+    sbon:          !!(row['СБОН']),
+    type:          row['_type'] || 'ATM',
     port:          row.port            || '',
     date_slo:      row['Date SLO']     || '',
     date_start:    row['Date Start']   || '',
@@ -620,6 +624,8 @@ function deserializeRow(r) {
   row.Limi         = !!r.limi;
   row['ТМК']       = !!r.tmk;
   row['Сигналізація'] = !!r.signalizaciya;
+  row['СБОН']         = !!r.sbon;
+  row['_type']        = r.type || 'ATM';
   row.port         = r.port        || '';
   row['Date SLO']  = r.date_slo    || '';
   row['Date Start']= r.date_start  || '';
@@ -678,6 +684,7 @@ function loadSeedData() {
 
 // ===== COLUMNS =====
 const COLUMNS = [
+  { key:'_type', label:'Тип', type:'typebadge', width:60, sortable:true },
   { key:'ID', label:'ID', type:'alnum', maxLen:10, sortable:true, width:100 },
   { key:'ADRES', label:'Адреса', type:'alnum', maxLen:64, sortable:true, wrap:true, width:260 },
   { key:'SD', label:'SD', type:'sd', sortable:true, width:140 },
@@ -691,15 +698,16 @@ const COLUMNS = [
   { key:'Канал', label:'Канал', type:'select', options:['','Провод','4g','ТВБВ'], width:110 },
   { key:'DIS', label:'Перевезено', type:'check', width:60 },
   { key:'BEC', label:'Рахунки', type:'check', width:60 },
-  { key:'Limi', label:'Ліміти', type:'check', width:60 },
+  { key:'Limi', label:'Ліміти', type:'check-atm', width:65 },
   { key:'ТМК', label:'ТМК', type:'check', width:65 },
   { key:'Сигналізація', label:'Сигналізація', type:'check', width:90 },
+  { key:'СБОН', label:'СБОН', type:'check-ipt', width:65 },
   { key:'port', label:'port', type:'port', width:80 },
   { key:'Date SLO', label:'Date of sending SLO', type:'date', sortable:true, width:150 },
   { key:'Date Start', label:'Date Start', type:'date', sortable:true, width:140 },
   { key:'Note', label:'Нотатки', type:'note', wrap:true, width:220 },
 ];
-const CHECK_COLS = ['dogovir','DIS','BEC','Limi'];
+const CHECK_COLS = ['dogovir','DIS','BEC'];
 const ALIASES = { 'ID':['id','№','код','code'] };
 
 let sheets = { active:[], zap:[] };
@@ -793,6 +801,8 @@ function normalizeRow(r, isZap) {
     row[col.key] = v;
   });
   if (!row['Канал'] && /^ТВБВ/i.test(String(row['Org']||'').trim())) row['Канал'] = 'ТВБВ';
+  if (!row['_type']) row['_type'] = r['_type'] || r['type'] || 'ATM';
+  if (!('СБОН' in row)) row['СБОН'] = parseCheck(r['СБОН'] || false);
   row.__meta = {
     created: parseDate(r['__created']) || todayISO(),
     modified: parseDate(r['__modified']) || todayISO(),
@@ -856,8 +866,13 @@ function sanitizeSD(v) {
 // ===== STATUS =====
 function getMissing(row) {
   const m = [];
-  // Усі check-поля включаючи ТМК
+  const isIPT = row['_type'] === 'IPT';
+  // Базові чекбокси для всіх
   [...CHECK_COLS, 'ТМК', 'Сигналізація'].forEach(k => { if (!row[k]) m.push(k); });
+  // Ліміти — тільки для ATM
+  if (!isIPT && !row['Limi']) m.push('Ліміти');
+  // СБОН — тільки для ІПТ
+  if (isIPT && !row['СБОН']) m.push('СБОН');
   if (!row['port']) m.push('port');
   if (!row['Канал']) m.push('Канал');
   return m;
@@ -1007,9 +1022,19 @@ function renderCell(row, col, idx) {
       oninput="updateCellSoft(${idx},'${col.key}',this.value)"
       onchange="this.value=sanitizeSD(this.value);updateCell(${idx},'${col.key}',this.value)"></td>`;
   }
-  if (col.type==='check') {
+  if (col.type==='check' || col.type==='check-atm' || col.type==='check-ipt') {
+    const isIPT = row['_type'] === 'IPT';
+    // check-atm — тільки для ATM; check-ipt — тільки для ІПТ
+    if (col.type==='check-atm' && isIPT) return `<td class="checkbox-cell" style="color:var(--text-muted);font-size:11px">—</td>`;
+    if (col.type==='check-ipt' && !isIPT) return `<td class="checkbox-cell" style="color:var(--text-muted);font-size:11px">—</td>`;
     return `<td class="checkbox-cell"><input type="checkbox" ${v?'checked':''}
       onchange="updateCell(${idx},'${col.key}',this.checked)"></td>`;
+  }
+  if (col.type==='typebadge') {
+    const isIPT = row['_type'] === 'IPT';
+    const color = isIPT ? 'background:#f3e8ff;color:#6d28d9' : 'background:#dbeafe;color:#1e40af';
+    const label = isIPT ? 'ІПТ' : 'ATM';
+    return `<td><span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;${color}">${label}</span></td>`;
   }
   if (col.type==='port') {
     const dup = v && isDuplicatePort(v,row.ADRES,idx);
@@ -1127,14 +1152,42 @@ function refreshRow(idx) {
 
 // ===== ROW ACTIONS =====
 function addRow() {
-  const empty = { __meta:{ created:todayISO(), modified:todayISO(), launchedAt:null } };
+  // Показуємо вибір типу
+  showAddTypeModal();
+}
+
+function showAddTypeModal() {
+  document.getElementById('modalContent').innerHTML = `
+    <h2 style="margin:0 0 16px 0">Додати нову заявку</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+      <div onclick="createNewRow('ATM')" style="border:1px solid var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:all .15s"
+        onmouseover="this.style.borderColor='#1e40af';this.style.background='#eff6ff'" onmouseout="this.style.borderColor='var(--border)';this.style.background=''">
+        <div style="font-size:32px;margin-bottom:8px">🏧</div>
+        <div style="font-size:15px;font-weight:600;color:#1e40af">ATM</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Банкомат · з Лімітами</div>
+      </div>
+      <div onclick="createNewRow('IPT')" style="border:1px solid var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:all .15s"
+        onmouseover="this.style.borderColor='#6d28d9';this.style.background='#faf5ff'" onmouseout="this.style.borderColor='var(--border)';this.style.background=''">
+        <div style="font-size:32px;margin-bottom:8px">💳</div>
+        <div style="font-size:15px;font-weight:600;color:#6d28d9">ІПТ</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Термінал · з СБОН</div>
+      </div>
+    </div>
+    <div style="text-align:right"><button class="btn" onclick="closeModal()">Скасувати</button></div>`;
+  document.getElementById('modal').classList.add('show');
+}
+
+function createNewRow(type) {
+  closeModal();
+  const empty = { __meta:{ created:todayISO(), modified:todayISO(), launchedAt:null }, _type: type };
   COLUMNS.forEach(c => {
-    if (c.type==='check') empty[c.key]=false;
+    if (c.type==='check'||c.type==='check-atm'||c.type==='check-ipt') empty[c.key]=false;
     else if (c.type==='date'&&c.today) empty[c.key]=todayISO();
+    else if (c.type==='typebadge') return;
     else empty[c.key]='';
   });
   sheets[currentSheet].push(empty);
-  logAction('add', '(новий)', `на аркуші ${currentSheet}`);
+  logAction('add', `(новий ${type})`, `на аркуші ${currentSheet}`);
   saveSheetToDB(currentSheet).catch(()=>{});
   render(); updateUI();
 }
