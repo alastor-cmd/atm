@@ -1205,17 +1205,31 @@ function showAddTypeModal() {
   document.getElementById('modal').classList.add('show');
 }
 
+function generateTempId(type) {
+  const prefix = type === 'IPT' ? 'K' : 'A';
+  const existing = new Set([...sheets.active, ...sheets.zap].map(r => r.ID));
+  let n = 1;
+  while (n <= 9999999) {
+    const candidate = prefix + String(n).padStart(7, '0');
+    if (!existing.has(candidate)) return candidate;
+    n++;
+  }
+  return prefix + Date.now().toString().slice(-7);
+}
+
 function createNewRow(type) {
   closeModal();
+  const tempId = generateTempId(type);
   const empty = { __meta:{ created:todayISO(), modified:todayISO(), launchedAt:null }, _type: type };
   COLUMNS.forEach(c => {
     if (c.type==='check'||c.type==='check-atm'||c.type==='check-ipt') empty[c.key]=false;
     else if (c.type==='date'&&c.today) empty[c.key]=todayISO();
     else if (c.type==='typebadge') return;
+    else if (c.key==='ID') empty[c.key]=tempId;
     else empty[c.key]='';
   });
   sheets[currentSheet].push(empty);
-  logAction('add', `(новий ${type})`, `на аркуші ${currentSheet}`);
+  logAction('add', tempId, `новий ${type} · тимчасовий ID`);
   saveSheetToDB(currentSheet).catch(()=>{});
   render(); updateUI();
 }
