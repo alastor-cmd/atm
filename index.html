@@ -171,6 +171,23 @@ td.meta-cell{font-size:10px;color:var(--text-muted);white-space:nowrap;}
 .log-action-import{color:#0369a1;}
 .log-action-export{color:#15803d;}
 .log-action-login{color:#1e40af;}
+
+/* Sticky колонки */
+.sticky-cb{position:sticky;left:0;z-index:3;background:inherit;}
+.sticky-type{position:sticky;left:32px;z-index:3;background:inherit;}
+.sticky-id{position:sticky;left:92px;z-index:3;background:inherit;}
+.sticky-adres{position:sticky;left:192px;z-index:3;background:inherit;min-width:220px;max-width:260px;}
+th.sticky-cb,th.sticky-type,th.sticky-id,th.sticky-adres{z-index:4;}
+th.sticky-cb{background:#f5f5f4;}
+th.sticky-type{background:#f5f5f4;}
+th.sticky-id{background:#f5f5f4;}
+th.sticky-adres{background:#f5f5f4;}
+td.sticky-cb,td.sticky-type,td.sticky-id,td.sticky-adres{background:var(--surface,#fff);}
+tr:hover td.sticky-cb,tr:hover td.sticky-type,tr:hover td.sticky-id,tr:hover td.sticky-adres{background:var(--row-hover,#fafaf9);}
+tr.row-overdue td.sticky-cb,tr.row-overdue td.sticky-type,tr.row-overdue td.sticky-id,tr.row-overdue td.sticky-adres{background:#fee2e2;}
+tr.row-soon td.sticky-cb,tr.row-soon td.sticky-type,tr.row-soon td.sticky-id,tr.row-soon td.sticky-adres{background:#fef3c7;}
+tr.row-selected td.sticky-cb,tr.row-selected td.sticky-type,tr.row-selected td.sticky-id,tr.row-selected td.sticky-adres{background:#dbeafe!important;}
+.sticky-shadow{box-shadow:2px 0 6px rgba(0,0,0,.08);}
 </style>
 </head>
 <body>
@@ -264,12 +281,17 @@ td.meta-cell{font-size:10px;color:var(--text-muted);white-space:nowrap;}
 
   <div class="bulk-bar" id="bulkBar">
     <span id="bulkCount">0 вибрано</span>
-    <button onclick="bulkLaunch()">Запустити вибрані →</button>
-    <button onclick="bulkCheck('dogovir')">✓ dogovir</button>
-    <button onclick="bulkCheck('DIS')">✓ DIS</button>
-    <button onclick="bulkCheck('BEC')">✓ BEC</button>
-    <button onclick="bulkCheck('Limi')">✓ Limi</button>
-    <button onclick="bulkDelete()">✕ Видалити</button>
+    <button onclick="bulkLaunch()">Запустити →</button>
+    <div style="width:1px;background:rgba(255,255,255,.3);height:18px;margin:0 4px"></div>
+    <button onclick="bulkCheck('dogovir')" title="Договір">✓ Договір</button>
+    <button onclick="bulkCheck('DIS')" title="Перевезено">✓ Перевезено</button>
+    <button onclick="bulkCheck('BEC')" title="Рахунки">✓ Рахунки</button>
+    <button onclick="bulkCheckConditional('Limi')" title="Ліміти (тільки ATM)">✓ Ліміти</button>
+    <button onclick="bulkCheck('ТМК')" title="ТМК">✓ ТМК</button>
+    <button onclick="bulkCheck('Сигналізація')" title="Сигналізація">✓ Сигналізація</button>
+    <button onclick="bulkCheckConditional('СБОН')" title="СБОН (тільки ІПТ)">✓ СБОН</button>
+    <div style="width:1px;background:rgba(255,255,255,.3);height:18px;margin:0 4px"></div>
+    <button onclick="bulkDelete()" style="background:rgba(220,50,50,.3);border-color:rgba(255,100,100,.4)">✕ Видалити</button>
     <button onclick="clearSelection()" style="margin-left:auto">Скасувати</button>
   </div>
 
@@ -964,6 +986,7 @@ function render() {
   const indices = getFilteredIndices();
   let html = '<table><thead><tr>';
   if (currentSheet==='active') html += `<th style="width:32px"><input type="checkbox" onchange="toggleAll(this.checked)"></th>`;
+  const STICKY_COLS = {'_type':'sticky-type','ID':'sticky-id','ADRES':'sticky-adres sticky-shadow'};
   COLUMNS.forEach(col => {
     const editable = col.type!=='status';
     const wrap = col.wrap?'col-wrap':'';
@@ -971,7 +994,8 @@ function render() {
     const arrow = sortBy===col.key?`<span class="sort-arrow active">${sortDir===1?'▲':'▼'}</span>`:'';
     const onclick = col.sortable?`onclick="if(!event.target.classList.contains('resizer'))toggleSort('${col.key}')"` :'';
     const w = colWidths[col.key]||col.width||120;
-    html += `<th class="${editable?'editable':''} ${wrap} ${sortable}" data-col="${col.key}" style="width:${w}px" ${onclick}>${col.label}${arrow}<span class="resizer" data-col="${col.key}"></span></th>`;
+    const stickyClass = STICKY_COLS[col.key]||'';
+    html += `<th class="${editable?'editable':''} ${wrap} ${sortable} ${stickyClass}" data-col="${col.key}" style="width:${w}px" ${onclick}>${col.label}${arrow}<span class="resizer" data-col="${col.key}"></span></th>`;
   });
   html += '<th>Дії</th>';
   if (currentSheet==='zap') html += '<th>Запущено</th>';
@@ -980,7 +1004,7 @@ function render() {
     const row = rows[i];
     const cls = [rowClass(row), selected.has(i)?'row-selected':''].filter(Boolean).join(' ');
     html += `<tr class="${cls}">`;
-    if (currentSheet==='active') html += `<td class="checkbox-cell"><input type="checkbox" ${selected.has(i)?'checked':''} onchange="toggleSelect(${i},this.checked)"></td>`;
+    if (currentSheet==='active') html += `<td class="checkbox-cell sticky-cb"><input type="checkbox" ${selected.has(i)?'checked':''} onchange="toggleSelect(${i},this.checked)"></td>`;
     COLUMNS.forEach(col => { html += renderCell(row,col,i); });
     html += renderActionCell(i,row);
     if (currentSheet==='zap') html += `<td class="meta-cell">${fmtDateUk(row.__meta?.launchedAt)||'—'}</td>`;
@@ -995,7 +1019,9 @@ function renderCell(row, col, idx) {
   const v = row[col.key];
   const wrapClass = col.wrap?'col-wrap':'';
   if (col.type==='alnum') {
-    const cls = (col.key==='ID'?'col-id ':'')+wrapClass;
+    const STICKY_TD = {'ID':'sticky-id','ADRES':'sticky-adres sticky-shadow'};
+    const stickyTd = STICKY_TD[col.key]||'';
+    const cls = (col.key==='ID'?'col-id ':'')+wrapClass+' '+stickyTd;
     const softHandler = col.key==='Org'
       ? `updateCellOrg(${idx},this.value.slice(0,${col.maxLen}))`
       : `updateCellSoft(${idx},'${col.key}',this.value.slice(0,${col.maxLen}))`;
@@ -1036,7 +1062,7 @@ function renderCell(row, col, idx) {
     const isIPT = row['_type'] === 'IPT';
     const color = isIPT ? 'background:#f3e8ff;color:#6d28d9' : 'background:#dbeafe;color:#1e40af';
     const label = isIPT ? 'ІПТ' : 'ATM';
-    return `<td><span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;${color}">${label}</span></td>`;
+    return `<td class="sticky-type"><span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;${color}">${label}</span></td>`;
   }
   if (col.type==='port') {
     const dup = v && isDuplicatePort(v,row.ADRES,idx);
@@ -1278,6 +1304,24 @@ function bulkCheck(field) {
     }
   });
   logAction('bulk-check', '', `${field}=true для ${selected.size} рядків`);
+  saveSheetToDB('active').catch(()=>{});
+  render();
+}
+
+function bulkCheckConditional(field) {
+  // Ліміти — тільки для ATM; СБОН — тільки для ІПТ
+  let count = 0;
+  [...selected].forEach(i => {
+    const row = sheets.active[i];
+    if (!row) return;
+    const isIPT = row['_type'] === 'IPT';
+    if (field === 'Limi' && isIPT) return;
+    if (field === 'СБОН' && !isIPT) return;
+    row[field] = true;
+    if (row.__meta) row.__meta.modified = todayISO();
+    count++;
+  });
+  logAction('bulk-check', '', `${field}=true для ${count} рядків`);
   saveSheetToDB('active').catch(()=>{});
   render();
 }
