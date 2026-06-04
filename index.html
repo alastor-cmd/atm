@@ -467,19 +467,33 @@ async function sbGet(table, params='') {
   return r.json();
 }
 async function sbPost(table, data) {
-  const r = await fetch(`${SB_URL}/rest/v1/${table}`, {
-    method: 'POST',
-    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY,
-                'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-    body: JSON.stringify(data)
-  });
-  if (!r.ok) throw new Error(await r.text());
+  // Батчинг — максимум 500 рядків за раз
+  const BATCH = 500;
+  const arr = Array.isArray(data) ? data : [data];
+  for (let i = 0; i < arr.length; i += BATCH) {
+    const chunk = arr.slice(i, i + BATCH);
+    const r = await fetch(`${SB_URL}/rest/v1/${table}`, {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY,
+                  'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify(chunk)
+    });
+    if (!r.ok) throw new Error(await r.text());
+  }
 }
 async function sbDelete(table, filter) {
-  await fetch(`${SB_URL}/rest/v1/${table}?${filter}`, {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?${filter}`, {
     method: 'DELETE',
-    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    headers: {
+      'apikey': SB_KEY,
+      'Authorization': 'Bearer ' + SB_KEY,
+      'Prefer': 'return=minimal'
+    }
   });
+  // Не кидаємо помилку якщо нічого не знайдено (404/406)
+  if (!r.ok && r.status !== 404 && r.status !== 406) {
+    console.warn('sbDelete warning:', r.status, await r.text());
+  }
 }
 
 async function initDB() {
@@ -574,13 +588,23 @@ function rowToSB(row, sheet) {
 }
 async function saveAllToServer() {
   try {
+    // Видаляємо всі записи
     await sbDelete('atm_data', 'id=gte.0');
     const all = [
       ...sheets.active.map(r => rowToSB(r,'ATM')),
       ...sheets.zap.map(r => rowToSB(r,'ZAP'))
     ];
-    if (all.length > 0) await sbPost('atm_data', all);
-  } catch(e) { console.warn('saveAllToServer error:', e); }
+    if (all.length > 0) {
+      await sbPost('atm_data', all);
+    }
+    // Оновлюємо статус
+    document.getElementById('dbStatus').textContent =
+      '● Збережено · ATM: ' + sheets.active.length + ', ZAP: ' + sheets.zap.length +
+      ' · ' + new Date().toLocaleTimeString('uk-UA');
+  } catch(e) {
+    console.error('saveAllToServer error:', e);
+    document.getElementById('dbStatus').textContent = '⚠ Помилка збереження: ' + e.message;
+  }
 }
 function dbPutAll(storeName, items) { return saveAllToServer(); }
 function dbSaveRow(storeName, row)  { return saveAllToServer(); }
