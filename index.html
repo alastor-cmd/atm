@@ -589,41 +589,44 @@ function rowToSB(row, sheet) {
   };
 }
 let _saving = false;
+let _saveTimer = null;
 
-async function saveAllToServer() {
-  if (_saving) return;
+// Дебаунс — чекаємо 300мс після останнього виклику
+function saveAllToServer() {
+  if (_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(_doSave, 300);
+  return new Promise(resolve => {
+    const orig = _saveTimer;
+    const check = setInterval(() => {
+      if (_saveTimer !== orig || !_saving) { clearInterval(check); resolve(); }
+    }, 50);
+  });
+}
+
+async function _doSave() {
+  if (_saving) { _saveTimer = setTimeout(_doSave, 300); return; }
   _saving = true;
+  _saveTimer = null;
   try {
+    // Знімок поточного стану
+    const atmRows = sheets.active.map(r => rowToSB(r,'ATM'));
+    const zapRows = sheets.zap.map(r => rowToSB(r,'ZAP'));
+    const all = [...atmRows, ...zapRows];
     await sbDelete('atm_data', 'id=gte.0');
-    const all = [
-      ...sheets.active.map(r => rowToSB(r,'ATM')),
-      ...sheets.zap.map(r => rowToSB(r,'ZAP'))
-    ];
     if (all.length > 0) await sbPost('atm_data', all);
     document.getElementById('dbStatus').textContent =
       '● Збережено · ATM: ' + sheets.active.length + ' · ZAP: ' + sheets.zap.length +
       ' · ' + new Date().toLocaleTimeString('uk-UA');
   } catch(e) {
-    console.error('saveAllToServer error:', e);
+    console.error('_doSave error:', e);
     document.getElementById('dbStatus').textContent = '⚠ Помилка: ' + e.message;
   } finally {
     _saving = false;
   }
 }
 
-async function saveActiveToServer() {
-  // Видаляємо тільки ATM записи, потім вставляємо актуальні
-  await sbDelete('atm_data', 'sheet=eq.ATM');
-  const rows = sheets.active.map(r => rowToSB(r,'ATM'));
-  if (rows.length > 0) await sbPost('atm_data', rows);
-}
-
-async function saveZapToServer() {
-  // Видаляємо тільки ZAP записи, потім вставляємо актуальні
-  await sbDelete('atm_data', 'sheet=eq.ZAP');
-  const rows = sheets.zap.map(r => rowToSB(r,'ZAP'));
-  if (rows.length > 0) await sbPost('atm_data', rows);
-}
+function saveActiveToServer() { return saveAllToServer(); }
+function saveZapToServer() { return saveAllToServer(); }
 
 
 function dbPutAll(storeName, items) { return saveAllToServer(); }
