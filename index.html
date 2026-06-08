@@ -589,21 +589,13 @@ function rowToSB(row, sheet) {
   };
 }
 let _saving = false;
-let _saveQueued = false;
 
 async function saveAllToServer() {
-  // Захист від паралельних викликів
-  if (_saving) { _saveQueued = true; return; }
+  if (_saving) return;
   _saving = true;
   try {
-    // ATM → atm_data, ZAP → atm_zap (окремі таблиці)
-    await sbDelete('atm_data', 'id=gte.0');
-    const atmAll = sheets.active.map(r => rowToSB(r,'ATM'));
-    if (atmAll.length > 0) await sbPost('atm_data', atmAll);
-
-    await sbDelete('atm_zap', 'id=gte.0');
-    const zapAll = sheets.zap.map(r => rowToSB(r,'ZAP'));
-    if (zapAll.length > 0) await sbPost('atm_zap', zapAll);
+    await saveActiveToServer();
+    await saveZapToServer();
     document.getElementById('dbStatus').textContent =
       '● Збережено · ATM: ' + sheets.active.length + ' · ZAP: ' + sheets.zap.length +
       ' · ' + new Date().toLocaleTimeString('uk-UA');
@@ -612,9 +604,22 @@ async function saveAllToServer() {
     document.getElementById('dbStatus').textContent = '⚠ Помилка: ' + e.message;
   } finally {
     _saving = false;
-    if (_saveQueued) { _saveQueued = false; saveAllToServer(); }
   }
 }
+
+async function saveActiveToServer() {
+  await sbDelete('atm_data', 'id=gte.0');
+  const rows = sheets.active.map(r => rowToSB(r,'ATM'));
+  if (rows.length > 0) await sbPost('atm_data', rows);
+}
+
+async function saveZapToServer() {
+  await sbDelete('atm_zap', 'id=gte.0');
+  const rows = sheets.zap.map(r => rowToSB(r,'ZAP'));
+  if (rows.length > 0) await sbPost('atm_zap', rows);
+}
+
+
 function dbPutAll(storeName, items) { return saveAllToServer(); }
 function dbSaveRow(storeName, row)  { return saveAllToServer(); }
 
@@ -649,12 +654,10 @@ async function loadFromDB() {
     let zapAll = [], from2 = 0;
     while (true) {
       const chunk = await sbGet('atm_zap', `order=id.asc&limit=1000&offset=${from2}`);
-      console.log('atm_zap chunk:', chunk.length, chunk[0]);
       zapAll = zapAll.concat(chunk);
       if (chunk.length < 1000) break;
       from2 += 1000;
     }
-    console.log('zapAll total:', zapAll.length);
     const atmRows = atmAll.map(r => deserializeRow(r));
     const zapRows = zapAll.map(r => deserializeRow(r));
     if (atmRows.length > 0 || zapRows.length > 0) {
@@ -1316,7 +1319,9 @@ async function launchRow(idx) {
   sheets.active.splice(idx,1);
   selected.delete(idx);
   logAction('launch', row.ID||'(без ID)', '→ ZAP запущено');
-  await saveAllToServer();
+  // Зберігаємо послідовно — спочатку ZAP (новий запис), потім ATM (видалений запис)
+  await saveZapToServer();
+  await saveActiveToServer();
   render(); updateUI();
 }
 
@@ -1327,7 +1332,8 @@ async function returnRow(idx) {
   sheets.active.push(row);
   sheets.zap.splice(idx,1);
   logAction('return', row.ID||'(без ID)', 'ZAP → Активні');
-  await saveAllToServer();
+  await saveActiveToServer();
+  await saveZapToServer();
   render(); updateUI();
 }
 
@@ -1353,7 +1359,8 @@ async function bulkLaunch() {
     }
   });
   logAction('bulk-launch', '', `${count} рядків → ZAP`);
-  await saveAllToServer();
+  await saveZapToServer();
+  await saveActiveToServer();
   selected.clear(); render(); updateUI();
   if (count===0) alert('Жоден з вибраних не готовий до запуску');
 }
