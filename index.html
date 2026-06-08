@@ -1526,56 +1526,174 @@ async function clearLog() {
 
 // ===== REPORT =====
 function getWaitingPort() { return sheets.active.filter(r => r['Date Start'] && !r.port); }
-function showReport() {
-  const ready=sheets.active.filter(isReady).length;
-  const pending=sheets.active.filter(isPending).length;
-  const launched=sheets.zap.length;
-  const byFio={};
-  [...sheets.active,...sheets.zap].forEach(r => {
-    const f=r.FIO||'(не вказано)';
-    if (!byFio[f]) byFio[f]={total:0,launched:0,pending:0};
-    byFio[f].total++;
-    if (sheets.zap.includes(r)) byFio[f].launched++;
-    else if (isPending(r)) byFio[f].pending++;
+function getMonthOptions() {
+  // Збираємо всі унікальні місяці з Date Start (ATM + ZAP)
+  const months = new Set();
+  [...sheets.active, ...sheets.zap].forEach(r => {
+    const d = r['Date Start'];
+    if (d && d.match(/^\d{4}-\d{2}/)) months.add(d.slice(0,7));
   });
-  const weekAgo=new Date(); weekAgo.setDate(weekAgo.getDate()-7);
-  const launchedWeek=sheets.zap.filter(r=>{ const d=r.__meta?.launchedAt; return d&&new Date(d)>=weekAgo; }).length;
-  const waitingPort=getWaitingPort();
-  const max=Math.max(pending,ready,launched,1);
-  const html=`
-    <h2>📊 Звіт</h2>
-    <h3 style="margin:16px 0 8px;font-size:13px">Воронка</h3>
-    <div class="funnel-row"><span>Незавершені</span><span><b>${pending}</b></span></div>
-    <div class="bar" style="width:${pending/max*100}%;background:#b45309"></div>
-    <div class="funnel-row"><span>Готові до запуску</span><span><b>${ready}</b></span></div>
-    <div class="bar" style="width:${ready/max*100}%"></div>
-    <div class="funnel-row"><span>Запущено</span><span><b>${launched}</b></span></div>
-    <div class="bar" style="width:${launched/max*100}%;background:var(--ok)"></div>
-    <div class="funnel-row"><span>Запущено за тиждень</span><span><b>${launchedWeek}</b></span></div>
-    <h3 style="margin:16px 0 8px;font-size:13px">По FIO</h3>
-    ${Object.entries(byFio).sort((a,b)=>b[1].total-a[1].total).map(([f,s])=>
-      `<div class="funnel-row"><span>${escapeHtml(f)}</span><span>всього:<b>${s.total}</b> · запущ.:<b>${s.launched}</b> · в роботі:<b>${s.pending}</b></span></div>`).join('')}
-    <h3 style="margin:16px 0 8px;font-size:13px">Чекають порт</h3>
-    ${waitingPort.length===0
-      ? `<div style="padding:8px 12px;color:var(--text-muted)">Немає таких заявок</div>`
-      : `<table style="width:100%;font-size:12px;border-collapse:collapse">
-          <thead><tr style="border-bottom:2px solid var(--border-strong);background:#f5f5f4">
-            <th style="text-align:left;padding:6px 8px">ID</th><th style="text-align:left;padding:6px 8px">ADRES</th>
-            <th style="text-align:left;padding:6px 8px">Old ATM</th><th style="text-align:left;padding:6px 8px">Date Start</th>
-          </tr></thead><tbody>
-          ${waitingPort.map(r=>`<tr style="border-bottom:1px solid var(--border)">
-            <td style="padding:5px 8px;font-family:monospace">${escapeHtml(r.ID)}</td>
-            <td style="padding:5px 8px">${escapeHtml(r.ADRES)}</td>
-            <td style="padding:5px 8px">${escapeHtml(r['Old ATM'])}</td>
-            <td style="padding:5px 8px">${fmtDateUk(r['Date Start'])}</td>
-          </tr>`).join('')}
-          </tbody></table>`}
-    <div style="margin-top:16px;text-align:right">
-      <button class="btn" onclick="exportReportCsv()">Зведення CSV</button>
-      <button class="btn btn-primary" onclick="closeModal()">Закрити</button>
-    </div>`;
-  document.getElementById('modalContent').innerHTML = html;
+  const sorted = [...months].sort().reverse();
+  const cur = todayISO().slice(0,7);
+  if (!months.has(cur)) sorted.unshift(cur);
+  return sorted;
+}
+
+function showReport(selectedMonth) {
+  const months = getMonthOptions();
+  if (!selectedMonth) selectedMonth = todayISO().slice(0,7);
+
+  // Фільтруємо пристрої по обраному місяцю (Date Start)
+  const monthRows = [...sheets.active, ...sheets.zap].filter(r => {
+    const d = r['Date Start'];
+    return d && d.slice(0,7) === selectedMonth;
+  });
+  const activeMonth = monthRows.filter(r => sheets.active.includes(r));
+  const zapMonth    = monthRows.filter(r => sheets.zap.includes(r));
+
+  // Статистика по FIO за місяць
+  const byFio = {};
+  monthRows.forEach(r => {
+    const f = r.FIO || '(не вказано)';
+    if (!byFio[f]) byFio[f] = { atm:0, ipt:0, launched:0 };
+    if (r._type === 'IPT') byFio[f].ipt++; else byFio[f].atm++;
+    if (sheets.zap.includes(r)) byFio[f].launched++;
+  });
+
+  // Форматуємо назву місяця
+  const [yr, mo] = selectedMonth.split('-');
+  const monthName = new Date(yr, mo-1).toLocaleString('uk-UA', {month:'long', year:'numeric'});
+
+  // Рядки таблиці
+  const thStyle = `style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--border-strong);background:#f5f5f4;font-size:11px;font-weight:600"`;
+  const tdStyle = `style="padding:5px 8px;border-bottom:1px solid var(--border);font-size:12px"`;
+
+  const buildRows = (rows) => rows.map(r => {
+    const isZap = sheets.zap.includes(r);
+    const typeBadge = r._type==='IPT'
+      ? `<span style="background:#f3e8ff;color:#6d28d9;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600">ІПТ</span>`
+      : `<span style="background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600">ATM</span>`;
+    const statusBadge = isZap
+      ? `<span style="color:var(--ok);font-weight:600">✓ Запущено</span>`
+      : `<span style="color:#b45309">В роботі</span>`;
+    return `<tr>
+      <td ${tdStyle}>${typeBadge}</td>
+      <td ${tdStyle} style="padding:5px 8px;font-family:monospace;font-weight:600;border-bottom:1px solid var(--border)">${escapeHtml(r.ID)}</td>
+      <td ${tdStyle}>${escapeHtml(r.ADRES||'')}</td>
+      <td ${tdStyle}>${escapeHtml(r.Org||'')}</td>
+      <td ${tdStyle}>${escapeHtml(r.FIO||'')}</td>
+      <td ${tdStyle}>${fmtDateUk(r['Date Start'])}</td>
+      <td ${tdStyle}>${statusBadge}</td>
+    </tr>`;
+  }).join('');
+
+  const monthSelect = months.map(m => {
+    const [y,mo2] = m.split('-');
+    const mn = new Date(y,mo2-1).toLocaleString('uk-UA',{month:'long',year:'numeric'});
+    return `<option value="${m}" ${m===selectedMonth?'selected':''}>${mn}</option>`;
+  }).join('');
+
+  const html2 = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <h2 style="margin:0">📊 Звіт за місяць</h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select onchange="showReport(this.value)"
+          style="padding:6px 10px;border:1px solid var(--border-strong);border-radius:5px;font-size:13px;font-family:inherit">
+          ${monthSelect}
+        </select>
+        <button class="btn btn-primary" onclick="exportMonthReport('${selectedMonth}')">📥 Excel</button>
+        <button class="btn" onclick="closeModal()">Закрити</button>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+      <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 16px;min-width:100px">
+        <div style="font-size:10px;font-weight:600;color:#15803d;text-transform:uppercase;letter-spacing:.05em">Всього</div>
+        <div style="font-size:22px;font-weight:700;color:#15803d;margin-top:4px">${monthRows.length}</div>
+      </div>
+      <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:10px 16px;min-width:100px">
+        <div style="font-size:10px;font-weight:600;color:#1e40af;text-transform:uppercase;letter-spacing:.05em">ATM</div>
+        <div style="font-size:22px;font-weight:700;color:#1e40af;margin-top:4px">${monthRows.filter(r=>r._type!=='IPT').length}</div>
+      </div>
+      <div style="background:#faf5ff;border:1px solid #c4b5fd;border-radius:8px;padding:10px 16px;min-width:100px">
+        <div style="font-size:10px;font-weight:600;color:#6d28d9;text-transform:uppercase;letter-spacing:.05em">ІПТ</div>
+        <div style="font-size:22px;font-weight:700;color:#6d28d9;margin-top:4px">${monthRows.filter(r=>r._type==='IPT').length}</div>
+      </div>
+      <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 16px;min-width:100px">
+        <div style="font-size:10px;font-weight:600;color:#15803d;text-transform:uppercase;letter-spacing:.05em">Запущено</div>
+        <div style="font-size:22px;font-weight:700;color:#15803d;margin-top:4px">${zapMonth.length}</div>
+      </div>
+      <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px 16px;min-width:100px">
+        <div style="font-size:10px;font-weight:600;color:#b45309;text-transform:uppercase;letter-spacing:.05em">В роботі</div>
+        <div style="font-size:22px;font-weight:700;color:#b45309;margin-top:4px">${activeMonth.length}</div>
+      </div>
+    </div>
+
+    ${monthRows.length === 0 ? `
+      <div style="text-align:center;padding:30px;color:var(--text-muted)">
+        <p style="font-size:14px">Немає пристроїв з Date Start у ${monthName}</p>
+      </div>` : `
+    <div style="overflow:auto;max-height:calc(85vh - 200px)">
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr>
+        <th ${thStyle}>Тип</th>
+        <th ${thStyle}>ID</th>
+        <th ${thStyle}>Адреса</th>
+        <th ${thStyle}>Організація</th>
+        <th ${thStyle}>FIO</th>
+        <th ${thStyle}>Date Start</th>
+        <th ${thStyle}>Статус</th>
+      </tr></thead>
+      <tbody>${buildRows(monthRows)}</tbody>
+    </table></div>
+
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+      <h3 style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-muted)">По відповідальному</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${Object.entries(byFio).sort((a,b)=>(b[1].atm+b[1].ipt)-(a[1].atm+a[1].ipt)).map(([f,s])=>`
+          <div style="background:#f9fafb;border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:12px">
+            <strong>${escapeHtml(f)}</strong>:
+            ATM ${s.atm} · ІПТ ${s.ipt} · запущено ${s.launched}
+          </div>`).join('')}
+      </div>
+    </div>`}`;
+
+  document.getElementById('modalContent').innerHTML = html2;
   document.getElementById('modal').classList.add('show');
+}
+
+function exportMonthReport(selectedMonth) {
+  const [yr, mo] = selectedMonth.split('-');
+  const monthName = new Date(yr, mo-1).toLocaleString('uk-UA',{month:'long',year:'numeric'});
+  const rows = [...sheets.active, ...sheets.zap].filter(r => {
+    const d = r['Date Start'];
+    return d && d.slice(0,7) === selectedMonth;
+  });
+  const data = rows.map(r => ({
+    'Тип':         r._type==='IPT' ? 'ІПТ' : 'ATM',
+    'ID':          r.ID||'',
+    'Адреса':      r.ADRES||'',
+    'Організація': r.Org||'',
+    'FIO':         r.FIO||'',
+    'Date Start':  fmtDateUk(r['Date Start']),
+    'Статус':      sheets.zap.includes(r) ? 'Запущено' : 'В роботі',
+    'Договір':     r.dogovir ? '✓' : '',
+    'Перевезено':  r.DIS ? '✓' : '',
+    'Рахунки':     r.BEC ? '✓' : '',
+    'Ліміти':      r.Limi ? '✓' : '',
+    'ТМК':         r['ТМК'] ? '✓' : '',
+    'Сигналізація':r['Сигналізація'] ? '✓' : '',
+    'СБОН':        r['СБОН'] ? '✓' : '',
+    'Порт':        r.port||'',
+    'Date SLO':    fmtDateUk(r['Date SLO']),
+    'Нотатки':     r.Note||'',
+  }));
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(data);
+  ws['!cols'] = [8,14,40,28,18,14,12,10,10,10,10,8,12,8,8,14,30].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb, ws, monthName.slice(0,31));
+  XLSX.writeFile(wb, `atm_report_${selectedMonth}.xlsx`);
+  logAction('export', '—', `Звіт за ${monthName}: ${rows.length} пристроїв`);
 }
 function closeModal() { document.getElementById('modal').classList.remove('show'); }
 
