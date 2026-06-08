@@ -649,10 +649,12 @@ async function loadFromDB() {
     let zapAll = [], from2 = 0;
     while (true) {
       const chunk = await sbGet('atm_zap', `order=id.asc&limit=1000&offset=${from2}`);
+      console.log('atm_zap chunk:', chunk.length, chunk[0]);
       zapAll = zapAll.concat(chunk);
       if (chunk.length < 1000) break;
       from2 += 1000;
     }
+    console.log('zapAll total:', zapAll.length);
     const atmRows = atmAll.map(r => deserializeRow(r));
     const zapRows = zapAll.map(r => deserializeRow(r));
     if (atmRows.length > 0 || zapRows.length > 0) {
