@@ -999,15 +999,22 @@ function sloWorkdaysUntil(row) {
   if (!row['Date SLO']) return null;
   return workdaysUntil(row['Date SLO']);
 }
-// Прострочка: понад 10 робочих днів після Date SLO (тільки якщо Date SLO заповнено)
-function isOverdue(row) {
-  const d = sloWorkdaysUntil(row);
-  return d !== null && d < -10;
+// Дедлайн рахується ВІД дня постановки на СЛО (Date SLO): від цього дня дається 10 робочих днів.
+const SLO_DEADLINE_DAYS = 10;
+// Робочих днів, що минуло від дня СЛО до сьогодні (>0 — СЛО вже була; <0 — ще попереду)
+function sloWorkdaysElapsed(row) {
+  if (!row['Date SLO']) return null;
+  return workdaysBetween(row['Date SLO'], todayISO());
 }
-// Дедлайн ≤ 10 робочих днів (майбутнє, але близько)
+// Прострочка: від дня СЛО минуло понад 10 робочих днів
+function isOverdue(row) {
+  const e = sloWorkdaysElapsed(row);
+  return e !== null && e > SLO_DEADLINE_DAYS;
+}
+// Дедлайн: СЛО вже відбулась і ще в межах 10 робочих днів (не прострочено)
 function isSoon(row) {
-  const d = sloWorkdaysUntil(row);
-  return d !== null && d >= 0 && d <= 10;
+  const e = sloWorkdaysElapsed(row);
+  return e !== null && e >= 0 && e <= SLO_DEADLINE_DAYS;
 }
 function rowClass(row) {
   if (currentSheet !== 'active') return '';
@@ -1475,8 +1482,8 @@ function updateSummary() {
   sm.innerHTML = `
     <div class="stat"><div class="stat-label">В роботі${scopeLabel}</div><div class="stat-value">${total}</div></div>
     <div class="stat ok"><div class="stat-label">Готові до запуску</div><div class="stat-value">${readyRows.length}</div></div>
-    <div class="stat soft"><div class="stat-label">Дедлайн ≤ 10 робочих днів</div><div class="stat-value">${soon}</div></div>
-    <div class="stat warn"><div class="stat-label">Прострочені (&gt;10 роб. днів)</div><div class="stat-value">${overdue}</div></div>
+    <div class="stat soft"><div class="stat-label">Дедлайн (≤10 роб. днів від СЛО)</div><div class="stat-value">${soon}</div></div>
+    <div class="stat warn"><div class="stat-label">Прострочені (&gt;10 роб. днів від СЛО)</div><div class="stat-value">${overdue}</div></div>
     <div class="stat"><div class="stat-label">Запущено (ZAP)</div><div class="stat-value">${launched}</div></div>`;
 }
 
