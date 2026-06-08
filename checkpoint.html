@@ -230,7 +230,13 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 async function sbGet(table, params='') {
   const r = await fetch(`${SB_URL}/rest/v1/${table}?${params}`, {
-    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    headers: {
+      'apikey': SB_KEY,
+      'Authorization': 'Bearer ' + SB_KEY,
+      'Range-Unit': 'items',
+      'Range': '0-9999',
+      'Prefer': 'count=none'
+    }
   });
   if (!r.ok) throw new Error(await r.text());
   return r.json();
@@ -319,8 +325,18 @@ async function saveDevicesToDB(devs) {
 
 async function loadDevicesFromDB() {
   try {
-    const rows = await sbGet('cp_devices', 'limit=10000&order=device_id.asc');
-    return rows.map(r => ({
+    // Supabase повертає max 1000 — використовуємо пагінацію
+    let all = [];
+    let from = 0;
+    const PAGE = 1000;
+    while (true) {
+      const rows = await sbGet('cp_devices',
+        `limit=${PAGE}&offset=${from}&order=device_id.asc`);
+      all = all.concat(rows);
+      if (rows.length < PAGE) break;
+      from += PAGE;
+    }
+    return all.map(r => ({
       id:                r.device_id,
       type:              r.type,
       adres:             r.adres||'',
@@ -393,7 +409,7 @@ async function saveReplacementsToDB() {
 
 async function loadReplacementsFromDB() {
   try {
-    const rows = await sbGet('cp_replacements', 'limit=10000');
+    const rows = await sbGet('cp_replacements', 'limit=1000&select=*');
     rows.forEach(r => { replacements[r.device_id] = { date: r.replace_date, deadline: r.deadline }; });
   } catch(e) { console.warn('loadReplacementsFromDB error:', e); }
 }
