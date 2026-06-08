@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<title>CheckPoint · Ощадбанк</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+body{background:#f5f5f4;color:#1c1917;font-size:13px;}
+:root{--accent:#1e40af;--ok:#15803d;--warn:#b91c1c;--border:#e5e7eb;--surface:#fff;--muted:#6b7280;}
+
+/* HEADER */
+.header{background:#1e40af;color:#fff;padding:10px 20px;display:flex;align-items:center;gap:12px;}
+.header h1{font-size:15px;font-weight:500;}
+.header .back{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 12px;border-radius:5px;cursor:pointer;font-size:12px;text-decoration:none;}
+.db-status{font-size:11px;opacity:.75;margin-left:8px;}
+
+/* UPLOAD ZONE */
+.upload-section{background:#fff;border-bottom:1px solid var(--border);padding:14px 20px;}
+.upload-title{font-size:13px;font-weight:600;margin-bottom:10px;color:#374151;}
+.upload-grid{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.upload-card{border:1px solid var(--border);border-radius:8px;padding:10px 14px;background:#f9fafb;min-width:140px;cursor:pointer;transition:all .15s;position:relative;}
+.upload-card:hover{border-color:var(--accent);background:#eff6ff;}
+.upload-card.loaded{border-color:var(--ok);background:#f0fdf4;}
+.upload-card.loaded::after{content:'✓';position:absolute;top:6px;right:8px;color:var(--ok);font-weight:700;}
+.upload-card-title{font-size:12px;font-weight:600;color:#374151;}
+.upload-card-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+.upload-card input{display:none;}
+.btn-load-all{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:500;}
+.btn-load-all:disabled{opacity:.5;cursor:not-allowed;}
+.load-status{font-size:12px;color:var(--muted);}
+
+/* TOOLBAR */
+.toolbar{padding:10px 20px;background:#fff;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.btn{padding:6px 12px;border:1px solid #d1d5db;background:#fff;color:#374151;border-radius:5px;cursor:pointer;font-size:12px;font-family:inherit;}
+.btn:hover{background:#f9fafb;}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+.btn-green{background:#15803d;color:#fff;border-color:#15803d;}
+.btn-green:hover{background:#166534;}
+.btn-blue{background:var(--accent);color:#fff;border-color:var(--accent);}
+.search-input{padding:6px 10px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;font-family:inherit;width:200px;}
+select.filter{padding:6px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;font-family:inherit;}
+.toolbar-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.total-info{font-size:12px;color:var(--muted);}
+
+/* STATS */
+.stats-row{display:flex;gap:10px;padding:10px 20px;background:#f9fafb;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+.stat-card{background:#fff;border:1px solid var(--border);border-radius:7px;padding:8px 14px;min-width:110px;}
+.stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+.stat-val{font-size:17px;font-weight:500;margin-top:2px;}
+.stat-val.ok{color:var(--ok);}
+.stat-val.warn{color:var(--warn);}
+
+/* BULK BAR */
+.bulk-bar{display:none;background:var(--accent);color:#fff;padding:8px 20px;align-items:center;gap:10px;font-size:12px;}
+.bulk-bar.show{display:flex;}
+.bulk-bar button{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:12px;}
+.bulk-bar button:hover{background:rgba(255,255,255,.3);}
+.bulk-bar .sep{width:1px;height:16px;background:rgba(255,255,255,.3);}
+
+/* TABLE */
+.table-wrap{overflow:auto;height:calc(100vh - 260px);background:#fff;}
+table{border-collapse:collapse;width:max-content;min-width:100%;font-size:12px;}
+th{background:#f9fafb;padding:7px 10px;text-align:left;border-bottom:2px solid #e5e7eb;white-space:nowrap;font-weight:500;position:sticky;top:0;z-index:2;cursor:pointer;user-select:none;}
+th:hover{background:#f3f4f6;}
+th .sort-arr{font-size:10px;color:var(--muted);margin-left:3px;}
+th .sort-arr.active{color:var(--accent);}
+td{padding:5px 10px;border-bottom:1px solid #f3f4f6;white-space:nowrap;vertical-align:middle;}
+tr:hover td{background:#fafafa;}
+tr.row-sel td{background:#dbeafe!important;}
+tr.row-replace td{background:#fef3c7;}
+
+/* Sticky колонки */
+.s-cb{position:sticky;left:0;z-index:3;background:inherit;}
+.s-id{position:sticky;left:32px;z-index:3;background:inherit;box-shadow:2px 0 4px rgba(0,0,0,.06);}
+th.s-cb,th.s-id{z-index:4;background:#f9fafb;}
+
+/* Badges */
+.badge{padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;}
+.badge-atm{background:#dbeafe;color:#1e40af;}
+.badge-ipt{background:#f3e8ff;color:#6d28d9;}
+.badge-ok{background:#dcfce7;color:#15803d;}
+.badge-warn{background:#fee2e2;color:#b91c1c;}
+.badge-cp{background:#f3f4f6;color:#374151;font-family:monospace;font-size:10px;}
+.badge-srv{background:#fef3c7;color:#92400e;font-size:10px;}
+.badge-replace{background:#fef3c7;color:#92400e;}
+
+/* CB */
+.cb{width:14px;height:14px;accent-color:var(--accent);cursor:pointer;}
+
+.multi-select-wrap{position:relative;display:inline-block;}
+.multi-select-trigger{padding:6px 10px;border:1px solid #d1d5db;border-radius:5px;background:#fff;cursor:pointer;font-size:12px;min-width:160px;display:flex;align-items:center;justify-content:space-between;user-select:none;}
+.multi-select-trigger:hover{background:#f9fafb;}
+.multi-select-dropdown{position:absolute;top:calc(100% + 4px);left:0;z-index:50;background:#fff;border:1px solid #d1d5db;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.12);min-width:200px;max-height:280px;overflow-y:auto;}
+.multi-select-item{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:12px;}
+.multi-select-item:hover{background:#f3f4f6;}
+.multi-select-item input{width:14px;height:14px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;}
+.multi-select-clear{padding:6px 12px;font-size:11px;color:var(--accent);cursor:pointer;border-top:1px solid #f3f4f6;text-align:center;}
+.multi-select-clear:hover{background:#eff6ff;}
+/* MODAL */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center;}
+.overlay.show{display:flex;}
+.modal{background:#fff;border-radius:10px;padding:24px;max-width:800px;width:95%;max-height:85vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);}
+.modal h2{font-size:16px;font-weight:600;margin-bottom:16px;}
+.modal-table{width:100%;border-collapse:collapse;font-size:12px;}
+.modal-table th{background:#f9fafb;padding:6px 10px;text-align:left;border-bottom:2px solid #e5e7eb;font-weight:500;}
+.modal-table td{padding:5px 10px;border-bottom:1px solid #f3f4f6;}
+.modal-actions{display:flex;gap:8px;margin-top:16px;justify-content:flex-end;}
+.deadline-badge{font-size:11px;padding:2px 8px;border-radius:10px;}
+.dl-ok{background:#dcfce7;color:#15803d;}
+.dl-warn{background:#fef3c7;color:#92400e;}
+.dl-overdue{background:#fee2e2;color:#b91c1c;}
+
+/* EMPTY */
+.empty{padding:60px 20px;text-align:center;color:var(--muted);}
+.empty p{font-size:14px;margin-bottom:8px;}
+.empty small{font-size:12px;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <svg width="22" height="22" viewBox="0 0 48 48" fill="none"><rect width="48" height="48" rx="10" fill="rgba(255,255,255,.2)"/><rect x="8" y="12" width="32" height="24" rx="3" fill="white" opacity=".9"/><rect x="12" y="18" width="10" height="10" rx="1" fill="#1e40af"/><rect x="26" y="18" width="10" height="4" rx="1" fill="#1e40af" opacity=".4"/><rect x="26" y="24" width="7" height="4" rx="1" fill="#1e40af" opacity=".4"/></svg>
+  <h1>CheckPoint · Управління пристроями</h1>
+  <span class="db-status" id="dbStatus">● Завантажте звіти для початку роботи</span>
+  <div style="margin-left:auto">
+    <a class="back" href="javascript:history.back()">← Назад</a>
+  </div>
+</div>
+
+<!-- UPLOAD -->
+<div class="upload-section">
+  <div class="upload-title">Завантаження звітів (оновлюються щопонеділка)</div>
+  <div class="upload-grid">
+    <label class="upload-card" id="card-stat">
+      <div class="upload-card-title">📊 STAT</div>
+      <div class="upload-card-sub">Перелік ТБС</div>
+      <input type="file" accept=".xlsx,.xls" onchange="loadFile(this,'stat')">
+    </label>
+    <label class="upload-card" id="card-115">
+      <div class="upload-card-title">🔒 СP 115</div>
+      <div class="upload-card-sub">Центр (xls)</div>
+      <input type="file" accept=".xlsx,.xls,.html,.htm" onchange="loadFile(this,'115')">
+    </label>
+    <label class="upload-card" id="card-116">
+      <div class="upload-card-title">🔒 СP 116</div>
+      <div class="upload-card-sub">Схід (xls)</div>
+      <input type="file" accept=".xlsx,.xls,.html,.htm" onchange="loadFile(this,'116')">
+    </label>
+    <label class="upload-card" id="card-117">
+      <div class="upload-card-title">🔒 СP 117</div>
+      <div class="upload-card-sub">Північ (xls)</div>
+      <input type="file" accept=".xlsx,.xls,.html,.htm" onchange="loadFile(this,'117')">
+    </label>
+    <label class="upload-card" id="card-118">
+      <div class="upload-card-title">🔒 СP 118</div>
+      <div class="upload-card-sub">Захід (xls)</div>
+      <input type="file" accept=".xlsx,.xls,.html,.htm" onchange="loadFile(this,'118')">
+    </label>
+    <button class="btn-load-all" id="buildBtn" onclick="buildTable()" disabled>▶ Сформувати таблицю</button>
+    <span class="load-status" id="loadStatus"></span>
+    <button class="btn" onclick="resetDB()" style="margin-left:auto;font-size:11px;color:#b91c1c;border-color:#fca5a5" title="Видалити локальну базу і почати з нуля">🗑 Скинути базу</button>
+  </div>
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar" id="toolbar" style="display:none">
+  <input class="search-input" id="searchInput" placeholder="Пошук ID, адреса, IP..." oninput="render()">
+  <select class="filter" id="typeFilter" onchange="render()">
+    <option value="">ATM + ІПТ</option>
+    <option value="ATM">Тільки ATM</option>
+    <option value="IPT">Тільки ІПТ</option>
+  </select>
+  <select class="filter" id="serverFilter" onchange="render()">
+    <option value="">Всі сервери</option>
+    <option value="115">CP 115</option>
+    <option value="116">CP 116</option>
+    <option value="117">CP 117</option>
+    <option value="118">CP 118</option>
+  </select>
+  <div class="multi-select-wrap" id="modelFilterWrap">
+    <div class="multi-select-trigger" id="modelFilterTrigger" onclick="toggleModelDropdown()">
+      <span id="modelFilterLabel">Всі профайли</span>
+      <span style="margin-left:4px;font-size:10px;color:var(--muted)">▼</span>
+    </div>
+    <div class="multi-select-dropdown" id="modelDropdown" style="display:none"></div>
+  </div>
+  <select class="filter" id="replaceFilter" onchange="render()">
+    <option value="">Всі статуси</option>
+    <option value="replace">На заміну</option>
+    <option value="ok">Без заміни</option>
+    <option value="overdue">Прострочено</option>
+  </select>
+  <button class="btn" onclick="resetFilters()">Скинути</button>
+  <div class="toolbar-right">
+    <button class="btn btn-green" id="exportBtn" onclick="exportReport()">📥 Звіт Excel</button>
+    <button class="btn btn-blue" onclick="showStats()">📊 Статистика</button>
+    <span class="total-info" id="totalInfo"></span>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="stats-row" id="statsRow" style="display:none"></div>
+
+<!-- BULK BAR -->
+<div class="bulk-bar" id="bulkBar">
+  <span id="bulkCount">0 вибрано</span>
+  <div class="sep"></div>
+  <button onclick="markForReplacement()">📋 Призначити на заміну</button>
+  <button onclick="clearSelection()" style="margin-left:auto">Скасувати</button>
+</div>
+
+<!-- TABLE -->
+<div class="table-wrap" id="tableWrap">
+  <div class="empty">
+    <p>Завантажте звіти вище та натисніть «Сформувати таблицю»</p>
+    <small>STAT — перелік ТБС · CP 115/116/117/118 — дані чекпоінтів</small>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="overlay" id="modal" onclick="if(event.target.id==='modal')closeModal()">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<script>
+// ===== SUPABASE =====
+const SB_URL = 'https://bdluvpnkxkaxtrbgskio.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJkbHV2cG5reGtheHRyYmdza2lvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxMDM3MDYsImV4cCI6MjA5NTY3OTcwNn0.ov7f-2wEQ8WCJMABNj9f3O9_11zkUOlwTzVINzGsKs4';
+
+async function sbGet(table, params='') {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?${params}`, {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbPost(table, data) {
+  const BATCH = 500;
+  const arr = Array.isArray(data) ? data : [data];
+  for (let i = 0; i < arr.length; i += BATCH) {
+    const r = await fetch(`${SB_URL}/rest/v1/${table}`, {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY,
+                  'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify(arr.slice(i, i + BATCH))
+    });
+    if (!r.ok) throw new Error(await r.text());
+  }
+}
+async function sbUpsert(table, data, onConflict) {
+  const BATCH = 500;
+  const arr = Array.isArray(data) ? data : [data];
+  for (let i = 0; i < arr.length; i += BATCH) {
+    const r = await fetch(`${SB_URL}/rest/v1/${table}?on_conflict=${onConflict}`, {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY,
+                  'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(arr.slice(i, i + BATCH))
+    });
+    if (!r.ok) throw new Error(await r.text());
+  }
+}
+async function sbDelete(table, filter) {
+  await fetch(`${SB_URL}/rest/v1/${table}?${filter}`, {
+    method: 'DELETE',
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Prefer': 'return=minimal' }
+  });
+}
+async function sbPatch(table, filter, data) {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?${filter}`, {
+    method: 'PATCH',
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY,
+                'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+    body: JSON.stringify(data)
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+// ===== STATE =====
+let loaded = { stat: null, '115': null, '116': null, '117': null, '118': null };
+let devices = [];
+let replacements = {};
+let selected = new Set();
+let sortBy = null, sortDir = 1;
+
+// ===== DB (Supabase) =====
+let cpDb = true; // завжди підключено
+
+async function initCpDB() {
+  try {
+    await sbGet('cp_devices', 'limit=1');
+    document.getElementById('dbStatus').textContent = '● Supabase підключено';
+    return true;
+  } catch(e) {
+    document.getElementById('dbStatus').textContent = '⚠ Помилка: ' + e.message;
+    return false;
+  }
+}
+
+async function saveDevicesToDB(devs) {
+  if (!devs.length) return;
+  const rows = devs.map(d => ({
+    device_id:         d.id,
+    type:              d.type,
+    adres:             d.adres||'',
+    misto:             d.misto||'',
+    sn:                d.sn||'',
+    model:             d.model||'',
+    ip:                d.ip||'',
+    ip_id:             d.ip_id||'',
+    gateway_status:    d.gateway_status||'',
+    cp_server:         d.cp_server||'',
+    model_change_date: d.model_change_date||'',
+    updated_at:        new Date().toISOString(),
+  }));
+  await sbUpsert('cp_devices', rows, 'device_id');
+}
+
+async function loadDevicesFromDB() {
+  try {
+    const rows = await sbGet('cp_devices', 'limit=10000&order=device_id.asc');
+    return rows.map(r => ({
+      id:                r.device_id,
+      type:              r.type,
+      adres:             r.adres||'',
+      misto:             r.misto||'',
+      sn:                r.sn||'',
+      model:             r.model||'',
+      ip:                r.ip||'',
+      ip_id:             r.ip_id||'',
+      gateway_status:    r.gateway_status||'',
+      cp_server:         r.cp_server||'',
+      model_change_date: r.model_change_date||'',
+      in_stat: true, in_cp: !!(r.model),
+    }));
+  } catch(e) { console.warn('loadDevicesFromDB error:', e); return []; }
+}
+
+async function saveMeta(key, value) {
+  localStorage.setItem('cp_meta_' + key, JSON.stringify(value));
+}
+async function loadMeta(key) {
+  try { return JSON.parse(localStorage.getItem('cp_meta_' + key)); } catch(e) { return null; }
+}
+
+async function saveModelDates(dates) {
+  // Зберігаємо в localStorage для швидкого доступу
+  localStorage.setItem('cp_model_dates', JSON.stringify(dates));
+}
+
+async function loadModelDates() {
+  try { return JSON.parse(localStorage.getItem('cp_model_dates')) || {}; } catch(e) { return {}; }
+}
+
+function getCurrentMonth() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+function countByModel(devs) {
+  const counts = {};
+  devs.forEach(d => {
+    if (!d.model) return;
+    counts[d.model] = (counts[d.model]||0) + 1;
+  });
+  return counts;
+}
+
+async function saveStatSnapshot(month, counts) {
+  try {
+    await sbUpsert('cp_stats', [{ month, counts, saved_at: new Date().toISOString() }], 'month');
+  } catch(e) { console.warn('saveStatSnapshot error:', e); }
+}
+
+async function loadAllStats() {
+  try {
+    const rows = await sbGet('cp_stats', 'order=month.asc');
+    return rows.map(r => ({ month: r.month, counts: r.counts }));
+  } catch(e) { return []; }
+}
+
+async function saveReplacementsToDB() {
+  try {
+    // Видаляємо старі і вставляємо нові
+    await sbDelete('cp_replacements', 'id=gte.0');
+    const rows = Object.entries(replacements).map(([device_id, val]) => ({
+      device_id, replace_date: val.date, deadline: val.deadline
+    }));
+    if (rows.length > 0) await sbPost('cp_replacements', rows);
+  } catch(e) { console.warn('saveReplacementsToDB error:', e); }
+}
+
+async function loadReplacementsFromDB() {
+  try {
+    const rows = await sbGet('cp_replacements', 'limit=10000');
+    rows.forEach(r => { replacements[r.device_id] = { date: r.replace_date, deadline: r.deadline }; });
+  } catch(e) { console.warn('loadReplacementsFromDB error:', e); }
+}
+
+// ===== FILE LOADING =====
+function loadFile(input, key) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      if (key === 'stat') {
+        // XLSX
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        const ws = wb.Sheets['Перелік'] || wb.Sheets[wb.SheetNames[0]];
+        loaded.stat = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      } else {
+        // HTML-xls — читаємо як текст і парсимо таблицю
+        const text = e.target.result;
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, 'text/html');
+        const rows = doc.querySelectorAll('table tr');
+        const data = [];
+        let headers = [];
+        rows.forEach((tr, ri) => {
+          const cells = [...tr.querySelectorAll('td,th')].map(c => c.textContent.trim());
+          if (ri === 0) { headers = cells; return; }
+          if (cells.length === 0) return;
+          const obj = {};
+          headers.forEach((h, i) => { obj[h] = cells[i] || ''; });
+          data.push(obj);
+        });
+        loaded[key] = data;
+      }
+      document.getElementById('card-' + key).classList.add('loaded');
+      checkAllLoaded();
+    } catch(err) {
+      alert(`Помилка завантаження ${key}: ${err.message}`);
+    }
+  };
+  if (key === 'stat') reader.readAsArrayBuffer(file);
+  else reader.readAsText(file, 'utf-8');
+}
+
+function checkAllLoaded() {
+  const count = Object.values(loaded).filter(v => v !== null).length;
+  document.getElementById('loadStatus').textContent = `Завантажено: ${count}/5`;
+  document.getElementById('buildBtn').disabled = count < 1;
+}
+
+// ===== BUILD TABLE =====
+function parseAppliedDate(s) {
+  if (!s) return '';
+  // Формат: "13:35:52 23-Dec-25" або "12:04:18 28-May-26"
+  const m = s.match(/\d+[:\-]\d+[:\-]?\d*\s+(\d{1,2}-[A-Za-z]{3}-\d{2,4})/);
+  if (m) return m[1];
+  // Якщо вже без часу
+  const m2 = s.match(/(\d{1,2}-[A-Za-z]{3}-\d{2,4})/);
+  return m2 ? m2[1] : s;
+}
+
+async function buildTable() {
+  devices = [];
+  const statMap = {};
+
+  // STAT
+  if (loaded.stat) {
+    loaded.stat.forEach(row => {
+      const id = String(row['ID'] || '').trim();
+      if (!id || id === 'nan') return;
+      statMap[id] = {
+        id,
+        type: id.startsWith('A') ? 'ATM' : 'IPT',
+        adres: String(row['Адреса'] || '').trim(),
+        misto: String(row['Місто'] || '').trim(),
+        oblast: String(row['Область'] || '').trim(),
+        vendor: String(row['Виробник'] || '').trim(),
+        sn: String(row['SN'] || '').trim(),
+      };
+    });
+  }
+
+  // CP файли
+  const cpMap = {};
+  ['115','116','117','118'].forEach(srv => {
+    if (!loaded[srv]) return;
+    loaded[srv].forEach(row => {
+      const name = String(row['Name'] || '').trim();
+      if (!/^E[AKS]\d/.test(name)) return;
+      const tbs_id = name.replace(/^E([AKS])/, '$1');
+      cpMap[tbs_id] = {
+        cp_name: name,
+        model: String(row['Provisioning Profile'] || row['Product'] || '').trim(),
+        ip: String(row['Last Known IP'] || '').trim(),
+        ip_id: String(row['IP/ID'] || '').trim(),
+        last_applied: String(row['Last Applied Settings'] || '').trim(),
+        gateway_status: String(row['Gateway Status'] || '').trim(),
+        cp_server: srv,
+      };
+    });
+  });
+
+  // Тільки пристрої що є в STAT
+  const allIds = new Set(Object.keys(statMap));
+  allIds.forEach(id => {
+    const s = statMap[id] || {};
+    const c = cpMap[id] || {};
+    devices.push({
+      id,
+      type: s.type || (id.startsWith('A') ? 'ATM' : 'IPT'),
+      adres: s.adres || '',
+      misto: s.misto || '',
+      oblast: s.oblast || '',
+      vendor: s.vendor || '',
+      sn: s.sn || '',
+      cp_name: c.cp_name || '',
+      model: c.model || '',
+      ip: c.ip || '',
+      ip_id: c.ip_id || '',
+      last_applied: c.last_applied || '',
+      gateway_status: c.gateway_status || '',
+      cp_server: c.cp_server || '',
+      in_stat: !!statMap[id],
+      in_cp: !!cpMap[id],
+
+    });
+  });
+
+  // Заповнюємо multi-select фільтр моделей
+  const models = [...new Set(devices.map(d => d.model).filter(Boolean))].sort();
+  fillModelDropdown(models);
+
+  document.getElementById('toolbar').style.display = 'flex';
+  document.getElementById('statsRow').style.display = 'flex';
+
+  // Порівнюємо моделі з попереднім завантаженням — фіксуємо дату зміни
+  const prevDates = await loadModelDates();
+  const today = todayISO();
+  const newDates = {};
+  devices.forEach(d => {
+    const prev = prevDates[d.id];
+    if (!prev) {
+      // Перше завантаження — встановлюємо сьогоднішню дату
+      newDates[d.id] = { model: d.model, date: today };
+      d.model_change_date = today;
+    } else if (prev.model !== d.model) {
+      // Модель змінилась — нова дата
+      newDates[d.id] = { model: d.model, date: today };
+      d.model_change_date = today;
+    } else {
+      // Модель не змінилась — зберігаємо попередню дату
+      newDates[d.id] = { model: d.model, date: prev.date };
+      d.model_change_date = prev.date;
+    }
+  });
+  await saveModelDates(newDates);
+
+  // Зберігаємо в IndexedDB
+  await saveDevicesToDB(devices);
+  await saveMeta('loadedDate', todayISO());
+  await saveMeta('counts', { total: devices.length, atm: devices.filter(d=>d.type==='ATM').length, ipt: devices.filter(d=>d.type==='IPT').length });
+
+  // Статистика — зберігаємо знімок якщо перший раз цього місяця
+  const curMonth = getCurrentMonth();
+  const lastStatMonth = await loadMeta('lastStatMonth');
+  if (lastStatMonth !== curMonth) {
+    const modelCounts = countByModel(devices);
+    await saveStatSnapshot(curMonth, modelCounts);
+    await saveMeta('lastStatMonth', curMonth);
+  }
+
+  updateDBStatus();
+  render();
+}
+
+// ===== RENDER =====
+function getFiltered() {
+  const q = (document.getElementById('searchInput')?.value||'').toLowerCase().trim();
+  const tf = document.getElementById('typeFilter')?.value||'';
+  const sf = document.getElementById('serverFilter')?.value||'';
+
+  const rf = document.getElementById('replaceFilter')?.value||'';
+  let rows = devices.filter(d => {
+    if (tf && d.type !== tf) return false;
+    if (sf && d.cp_server !== sf) return false;
+    const selModels = getSelectedModels();
+    if (selModels.length > 0 && !selModels.includes(d.model)) return false;
+    if (rf) {
+      const r = replacements[d.id];
+      if (rf==='replace' && !r) return false;
+      if (rf==='ok' && r) return false;
+      if (rf==='overdue' && (!r || workdaysLeft(r.deadline)>=0)) return false;
+    }
+    if (q) {
+      const hay = [d.id, d.adres, d.misto, d.ip, d.cp_name, d.model].join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  if (sortBy) {
+    rows.sort((a,b) => {
+      const va = String(a[sortBy]||'').toLowerCase();
+      const vb = String(b[sortBy]||'').toLowerCase();
+      return va < vb ? -sortDir : va > vb ? sortDir : 0;
+    });
+  }
+  return rows;
+}
+
+function render() {
+  const rows = getFiltered();
+  document.getElementById('totalInfo').textContent = `Показано: ${rows.length} з ${devices.length}`;
+  updateStats(rows);
+  updateBulkBar();
+
+  if (rows.length === 0) {
+    document.getElementById('tableWrap').innerHTML = '<div class="empty"><p>Нічого не знайдено</p></div>';
+    return;
+  }
+
+  const COLS = [
+    {key:'type',label:'Тип',w:55},
+    {key:'id',label:'ID',w:110},
+    {key:'sn',label:'Серійний №',w:120},
+    {key:'misto',label:'Місто',w:120},
+    {key:'adres',label:'Адреса',w:260},
+    {key:'model',label:'Профайл CP',w:160},
+    {key:'ip',label:'IP адреса',w:130},
+    {key:'model_change_date',label:'Дата зміни моделі',w:140},
+    {key:'gateway_status',label:'Gateway',w:90},
+    {key:'cp_server',label:'Сервер',w:75},
+    {key:'replace_status',label:'Статус заміни',w:130},
+  ];
+
+  let html = '<table><thead><tr>';
+  html += `<th class="s-cb" style="width:32px"><input type="checkbox" class="cb" onchange="toggleAll(this.checked)"></th>`;
+  COLS.forEach(c => {
+    const arr = sortBy===c.key ? `<span class="sort-arr active">${sortDir===1?'▲':'▼'}</span>` : '<span class="sort-arr">↕</span>';
+    const sticky = c.key==='id' ? ' s-id' : '';
+    html += `<th class="${sticky}" style="width:${c.w}px" onclick="toggleSort('${c.key}')">${c.label}${arr}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  rows.forEach(d => {
+    const repl = replacements[d.id];
+    const isRepl = !!repl;
+    const isSel = selected.has(d.id);
+    const rowCls = isSel ? 'row-sel' : (isRepl ? 'row-replace' : '');
+    html += `<tr class="${rowCls}">`;
+    html += `<td class="s-cb cb-cell"><input type="checkbox" class="cb" ${isSel?'checked':''} onchange="toggleSelect('${d.id}',this.checked)"></td>`;
+    COLS.forEach(c => {
+      if (c.key==='type') {
+        html += `<td><span class="badge ${d.type==='ATM'?'badge-atm':'badge-ipt'}">${d.type==='ATM'?'ATM':'ІПТ'}</span></td>`;
+      } else if (c.key==='id') {
+        html += `<td class="s-id" style="font-family:monospace;font-weight:600">${esc(d.id)}</td>`;
+      } else if (c.key==='cp_server') {
+        html += `<td>${d.cp_server ? `<span class="badge badge-srv">CP ${esc(d.cp_server)}</span>` : ''}</td>`;
+      } else if (c.key==='gateway_status') {
+        const ok = d.gateway_status === 'OK';
+        html += `<td>${d.gateway_status ? `<span class="badge ${ok?'badge-ok':'badge-warn'}">${esc(d.gateway_status)}</span>` : ''}</td>`;
+      } else if (c.key==='replace_status') {
+        if (isRepl) {
+          const wdays = workdaysLeft(repl.deadline);
+          const cls = wdays > 3 ? 'dl-ok' : wdays >= 0 ? 'dl-warn' : 'dl-overdue';
+          const txt = wdays >= 0 ? `залишилось ${wdays} роб. дн.` : `прострочено`;
+          html += `<td><span class="deadline-badge ${cls}">🔄 На заміну · ${txt}</span></td>`;
+        } else if (!d.in_stat) {
+          html += `<td><span style="color:var(--muted);font-size:11px">немає в STAT</span></td>`;
+        } else if (!d.in_cp) {
+          html += `<td><span style="color:var(--muted);font-size:11px">немає в CP</span></td>`;
+        } else {
+          html += `<td></td>`;
+        }
+      } else {
+        html += `<td>${esc(d[c.key]||'')}</td>`;
+      }
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('tableWrap').innerHTML = html;
+}
+
+function updateStats(rows) {
+  const atm = rows.filter(d=>d.type==='ATM').length;
+  const ipt = rows.filter(d=>d.type==='IPT').length;
+  const noCp = rows.filter(d=>!d.in_cp).length;
+  const replCount = rows.filter(d=>replacements[d.id]).length;
+  const overdue = rows.filter(d=>{
+    const r=replacements[d.id]; return r && workdaysLeft(r.deadline)<0;
+  }).length;
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-card"><div class="stat-label">ATM</div><div class="stat-val">${atm}</div></div>
+    <div class="stat-card"><div class="stat-label">ІПТ</div><div class="stat-val">${ipt}</div></div>
+    <div class="stat-card"><div class="stat-label">Всього</div><div class="stat-val">${atm+ipt}</div></div>
+    <div class="stat-card"><div class="stat-label">Немає в CP</div><div class="stat-val warn">${noCp}</div></div>
+    <div class="stat-card"><div class="stat-label">На заміну</div><div class="stat-val">${replCount}</div></div>
+    <div class="stat-card"><div class="stat-label">Прострочено</div><div class="stat-val ${overdue>0?'warn':''}">${overdue}</div></div>`;
+}
+
+// ===== SORT =====
+function toggleSort(key) {
+  if (sortBy===key) { if(sortDir===1) sortDir=-1; else {sortBy=null;sortDir=1;} }
+  else { sortBy=key; sortDir=1; }
+  render();
+}
+
+// ===== SELECTION =====
+function toggleSelect(id, on) { if(on) selected.add(id); else selected.delete(id); updateBulkBar(); updateRow(id); }
+function toggleAll(on) {
+  selected.clear();
+  if (on) getFiltered().forEach(d => selected.add(d.id));
+  render();
+}
+function clearSelection() { selected.clear(); render(); }
+function updateBulkBar() {
+  document.getElementById('bulkCount').textContent = `${selected.size} вибрано`;
+  document.getElementById('bulkBar').classList.toggle('show', selected.size > 0);
+}
+function updateRow(id) { render(); }
+
+// ===== REPLACEMENT =====
+function workdaysLeft(deadlineISO) {
+  if (!deadlineISO) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dl = new Date(deadlineISO); dl.setHours(0,0,0,0);
+  let count = 0, sign = dl >= today ? 1 : -1;
+  let cur = new Date(sign===1 ? today : dl);
+  let end = new Date(sign===1 ? dl : today);
+  while (cur < end) {
+    cur.setDate(cur.getDate()+1);
+    const dow = cur.getDay();
+    if (dow!==0&&dow!==6) count++;
+  }
+  return sign * count;
+}
+
+function addWorkdays(startDate, days) {
+  let d = new Date(startDate); d.setHours(0,0,0,0);
+  let added = 0;
+  while (added < days) {
+    d.setDate(d.getDate()+1);
+    if (d.getDay()!==0&&d.getDay()!==6) added++;
+  }
+  return d.toISOString().slice(0,10);
+}
+
+function todayISO() { return new Date().toISOString().slice(0,10); }
+
+let _pendingReplacement = null; // тимчасово зберігаємо дані для підтвердження
+
+function markForReplacement() {
+  const ids = [...selected];
+  if (!ids.length) return;
+  const today = todayISO();
+  const deadline = addWorkdays(today, 5);
+  const rows = devices.filter(d => ids.includes(d.id));
+
+  // Зберігаємо дані для confirmReplacement
+  _pendingReplacement = { today, deadline, ids };
+
+  document.getElementById('modalContent').innerHTML = `
+    <h2>📋 Призначити на заміну CheckPoint</h2>
+    <p style="color:var(--muted);font-size:12px;margin-bottom:14px">
+      Вибрано ${ids.length} пристроїв. Дедлайн заміни: <strong>5 робочих днів</strong> від сьогодні (${fmtDate(today)} → ${fmtDate(deadline)})
+    </p>
+    <div style="overflow:auto;max-height:350px">
+    <table class="modal-table">
+      <thead><tr><th>ID</th><th>Тип</th><th>Адреса</th><th>Місто</th><th>Профайл CP</th><th>IP</th></tr></thead>
+      <tbody>${rows.map(d=>`<tr>
+        <td style="font-family:monospace">${esc(d.id)}</td>
+        <td><span class="badge ${d.type==='ATM'?'badge-atm':'badge-ipt'}">${d.type}</span></td>
+        <td>${esc(d.adres)}</td><td>${esc(d.misto)}</td>
+        <td>${esc(d.model)}</td><td style="font-family:monospace">${esc(d.ip)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Скасувати</button>
+      <button class="btn btn-green" onclick="confirmReplacement()">✓ Підтвердити призначення</button>
+    </div>`;
+  document.getElementById('modal').classList.add('show');
+}
+
+async function confirmReplacement() {
+  if (!_pendingReplacement) return;
+  const { today, deadline, ids } = _pendingReplacement;
+  _pendingReplacement = null;
+  ids.forEach(id => {
+    replacements[id] = { date: today, deadline };
+  });
+  await saveReplacementsToDB();
+  closeModal();
+  selected.clear();
+  render();
+}
+
+// ===== EXPORT =====
+async function exportReport() {
+  const rows = getFiltered();
+  const data = rows.map(d => {
+    const r = replacements[d.id];
+    return {
+      'Тип': d.type,
+      'ID пристрою': d.id,
+      'Адреса': d.adres,
+      'Місто': d.misto,
+      'Область': d.oblast,
+      'Виробник ATM': d.vendor,
+      'CP ID': d.cp_name,
+      'Профайл CP': d.model,
+      'IP адреса': d.ip,
+      'IP/ID': d.ip_id,
+      'Дата зміни моделі': d.last_applied,
+      'Gateway': d.gateway_status,
+      'Сервер': d.cp_server ? 'CP '+d.cp_server : '',
+      'На заміну з': r ? r.date : '',
+      'Дедлайн заміни': r ? r.deadline : '',
+      'Залишилось роб.днів': r ? workdaysLeft(r.deadline) : '',
+    };
+  });
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(data);
+  // Ширини колонок
+  ws['!cols'] = [8,14,40,18,18,16,16,24,16,12,22,12,10,14,14,18].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb, ws, 'CheckPoint');
+
+  // Окремий лист — тільки на заміну
+  const replRows = rows.filter(d => replacements[d.id]);
+  if (replRows.length > 0) {
+    const replData = replRows.map(d => {
+      const r = replacements[d.id];
+      const wdays = workdaysLeft(r.deadline);
+      return {
+        'Тип': d.type,
+        'ID пристрою': d.id,
+        'Адреса': d.adres,
+        'Місто': d.misto,
+        'Профайл CP': d.model,
+        'IP адреса': d.ip,
+        'Призначено на заміну': r.date,
+        'Дедлайн': r.deadline,
+        'Залишилось роб.днів': wdays,
+        'Статус': wdays < 0 ? 'ПРОСТРОЧЕНО' : wdays <= 2 ? 'ТЕРМІНОВО' : 'В роботі',
+      };
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(replData), 'На заміну');
+  }
+
+  const date = todayISO();
+  XLSX.writeFile(wb, `checkpoint_report_${date}.xlsx`);
+}
+
+// ===== UTILS =====
+function resetFilters() {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('typeFilter').value = '';
+  document.getElementById('serverFilter').value = '';
+  clearModelFilter();
+  document.getElementById('replaceFilter').value = '';
+  render();
+}
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fmtDate(iso){ if(!iso)return''; const m=iso.match(/(\d{4})-(\d{2})-(\d{2})/); return m?`${m[3]}.${m[2]}.${m[1]}`:iso; }
+// ===== MULTI-SELECT МОДЕЛЕЙ =====
+let selectedModels = new Set();
+
+function fillModelDropdown(models) {
+  const dd = document.getElementById('modelDropdown');
+  if (!dd) return;
+  dd.innerHTML = models.map(m => `
+    <div class="multi-select-item" onclick="toggleModel('${esc(m)}',event)">
+      <input type="checkbox" id="mc_${esc(m)}" ${selectedModels.has(m)?'checked':''} onclick="event.stopPropagation();toggleModel('${esc(m)}',event)">
+      <label for="mc_${esc(m)}" style="cursor:pointer">${esc(m)}</label>
+    </div>`).join('') +
+    '<div class="multi-select-clear" onclick="clearModelFilter()">Скинути вибір</div>';
+  updateModelLabel();
+}
+
+function toggleModel(model, e) {
+  e.stopPropagation();
+  if (selectedModels.has(model)) selectedModels.delete(model);
+  else selectedModels.add(model);
+  // Оновлюємо чекбокс
+  const cb = document.getElementById('mc_' + model);
+  if (cb) cb.checked = selectedModels.has(model);
+  updateModelLabel();
+  render();
+}
+
+function getSelectedModels() { return [...selectedModels]; }
+
+function updateModelLabel() {
+  const lbl = document.getElementById('modelFilterLabel');
+  if (!lbl) return;
+  if (selectedModels.size === 0) lbl.textContent = 'Всі профайли';
+  else if (selectedModels.size === 1) lbl.textContent = [...selectedModels][0];
+  else lbl.textContent = `Вибрано: ${selectedModels.size}`;
+}
+
+function clearModelFilter() {
+  selectedModels.clear();
+  document.querySelectorAll('[id^="mc_"]').forEach(cb => cb.checked = false);
+  updateModelLabel();
+  render();
+}
+
+function toggleModelDropdown() {
+  const dd = document.getElementById('modelDropdown');
+  dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+}
+
+// Закриваємо dropdown при кліку поза ним
+document.addEventListener('click', (e) => {
+  const wrap = document.getElementById('modelFilterWrap');
+  if (wrap && !wrap.contains(e.target)) {
+    const dd = document.getElementById('modelDropdown');
+    if (dd) dd.style.display = 'none';
+  }
+});
+
+async function showStats() {
+  const stats = await loadAllStats();
+  if (!stats.length) {
+    alert('Статистика ще не накопичена. Завантажте файли — перший знімок буде збережено.');
+    return;
+  }
+  // Збираємо всі моделі
+  const allModels = [...new Set(stats.flatMap(s => Object.keys(s.counts)))].sort();
+  const months = stats.map(s => s.month);
+
+  // Таблиця місяць × модель
+  let thead = '<tr><th>Місяць</th>' + allModels.map(m=>`<th>${esc(m)}</th>`).join('') + '<th>Всього</th></tr>';
+  let tbody = stats.map(s => {
+    const total = Object.values(s.counts).reduce((a,b)=>a+b,0);
+    const cells = allModels.map(m => `<td style="text-align:right">${s.counts[m]||0}</td>`).join('');
+    const [yr,mo] = s.month.split('-');
+    const monthName = new Date(yr,mo-1).toLocaleString('uk-UA',{month:'long',year:'numeric'});
+    return `<tr><td style="white-space:nowrap"><strong>${monthName}</strong></td>${cells}<td style="text-align:right;font-weight:500">${total}</td></tr>`;
+  }).join('');
+
+  document.getElementById('modalContent').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="margin:0">📊 Статистика профайлів CP по місяцях</h2>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-green" onclick="exportStats()">📥 Excel</button>
+        <button class="btn" onclick="closeModal()">Закрити</button>
+      </div>
+    </div>
+    <p style="color:var(--muted);font-size:12px;margin-bottom:14px">
+      Знімок фіксується при першому завантаженні файлів у кожному місяці
+    </p>
+    <div style="overflow:auto">
+    <table class="modal-table">
+      <thead>${thead}</thead>
+      <tbody>${tbody}</tbody>
+    </table></div>`;
+  document.getElementById('modal').classList.add('show');
+}
+
+async function exportStats() {
+  const stats = await loadAllStats();
+  if (!stats.length) return;
+  const allModels = [...new Set(stats.flatMap(s => Object.keys(s.counts)))].sort();
+  const rows = stats.map(s => {
+    const [yr,mo] = s.month.split('-');
+    const monthName = new Date(yr,mo-1).toLocaleString('uk-UA',{month:'long',year:'numeric'});
+    const row = { 'Місяць': monthName };
+    allModels.forEach(m => { row[m] = s.counts[m]||0; });
+    row['Всього'] = Object.values(s.counts).reduce((a,b)=>a+b,0);
+    return row;
+  });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Статистика CP');
+  XLSX.writeFile(wb, `cp_stats_${todayISO()}.xlsx`);
+}
+
+async function resetDB() {
+  if (!confirm('Очистити базу даних? Всі збережені дані (пристрої, статистика, заміни) будуть видалені.')) return;
+  try {
+    await sbDelete('cp_devices', 'id=gte.0');
+    await sbDelete('cp_replacements', 'id=gte.0');
+    await sbDelete('cp_stats', 'id=gte.0');
+    localStorage.removeItem('cp_model_dates');
+    localStorage.removeItem('cp_meta_loadedDate');
+    localStorage.removeItem('cp_meta_counts');
+    localStorage.removeItem('cp_meta_lastStatMonth');
+  } catch(e) { console.warn('resetDB error:', e); }
+  devices = []; replacements = {}; selected.clear();
+  document.getElementById('toolbar').style.display = 'none';
+  document.getElementById('statsRow').style.display = 'none';
+  document.getElementById('bulkBar').classList.remove('show');
+  document.getElementById('tableWrap').innerHTML = '<div class="empty"><p>База очищена. Завантажте файли знову.</p></div>';
+  document.getElementById('dbStatus').textContent = '● База очищена';
+  document.getElementById('loadStatus').textContent = '';
+  document.getElementById('buildBtn').disabled = true;
+  document.getElementById('buildBtn').textContent = '▶ Сформувати таблицю';
+  ['stat','115','116','117','118'].forEach(k => {
+    loaded[k] = null;
+    document.getElementById('card-'+k)?.classList.remove('loaded');
+  });
+  alert('Базу очищено. Тепер завантажте файли знову.');
+}
+
+function closeModal(){ document.getElementById('modal').classList.remove('show'); }
+
+async function updateDBStatus() {
+  const date = await loadMeta('loadedDate');
+  const counts = await loadMeta('counts');
+  if (date && counts) {
+    document.getElementById('dbStatus').textContent =
+      `● Дані від ${fmtDate(date)} · ATM: ${counts.atm}, ІПТ: ${counts.ipt}, Разом: ${counts.total}`;
+  }
+}
+
+// Видалення заміни
+async function removeReplacement(id) {
+  delete replacements[id];
+  await saveReplacementsToDB();
+  render();
+}
+
+// ===== СТАРТ =====
+(async function startup() {
+  await initCpDB();
+  await loadReplacementsFromDB();
+
+  const saved = await loadDevicesFromDB();
+  if (saved.length > 0) {
+    devices = saved;
+    const date = await loadMeta('loadedDate');
+    const counts = await loadMeta('counts');
+
+    // Оновлюємо UI
+    const models = [...new Set(devices.map(d => d.model).filter(Boolean))].sort();
+    fillModelDropdown(models);
+
+    document.getElementById('toolbar').style.display = 'flex';
+    document.getElementById('statsRow').style.display = 'flex';
+    document.getElementById('buildBtn').disabled = false;
+
+    // Позначаємо картки як "є в базі"
+    document.getElementById('dbStatus').textContent =
+      `● Дані від ${fmtDate(date||'')} · ${counts?.total||saved.length} пристроїв · Оновіть файли якщо потрібно`;
+
+    // Показуємо підказку що є дані
+    document.getElementById('loadStatus').textContent = `Є збережені дані від ${fmtDate(date||'')}`;
+    document.getElementById('buildBtn').textContent = '▶ Оновити таблицю';
+
+    render();
+  }
+})();
+</script>
+</body>
+</html>
