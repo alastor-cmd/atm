@@ -1256,6 +1256,7 @@ function createNewRow(type) {
   });
   sheets[currentSheet].push(empty);
   logAction('add', tempId, `новий ${type} · тимчасовий ID`);
+  saveAllToServer().catch(()=>{});
   saveSheetToDB(currentSheet).catch(()=>{});
   render(); updateUI();
 }
@@ -1272,18 +1273,18 @@ function duplicateRow(idx) {
   render();
 }
 
-function deleteRow(idx) {
+async function deleteRow(idx) {
   if (!confirm('Видалити рядок?')) return;
   const rows = sheets[currentSheet];
   const id = rows[idx]?.ID||'(без ID)';
   rows.splice(idx,1);
   selected.delete(idx);
   logAction('delete', id, `видалено з ${currentSheet}`);
-  saveSheetToDB(currentSheet).catch(()=>{});
+  await saveAllToServer();
   render(); updateUI();
 }
 
-function launchRow(idx) {
+async function launchRow(idx) {
   const row = sheets.active[idx];
   if (!row||!isReady(row)) return;
   if (!row.__meta) row.__meta = {};
@@ -1292,20 +1293,18 @@ function launchRow(idx) {
   sheets.active.splice(idx,1);
   selected.delete(idx);
   logAction('launch', row.ID||'(без ID)', '→ ZAP запущено');
-  dbPutAll('atm', sheets.active).catch(()=>{});
-  dbPutAll('zap', sheets.zap).catch(()=>{});
+  await saveAllToServer();
   render(); updateUI();
 }
 
-function returnRow(idx) {
+async function returnRow(idx) {
   const row = sheets.zap[idx];
   if (!row) return;
   if (row.__meta) row.__meta.launchedAt = null;
   sheets.active.push(row);
   sheets.zap.splice(idx,1);
   logAction('return', row.ID||'(без ID)', 'ZAP → Активні');
-  dbPutAll('atm', sheets.active).catch(()=>{});
-  dbPutAll('zap', sheets.zap).catch(()=>{});
+  await saveAllToServer();
   render(); updateUI();
 }
 
@@ -1317,7 +1316,7 @@ function updateBulkBar() {
   document.getElementById('bulkCount').textContent = `${selected.size} вибрано`;
   document.getElementById('bulkBar').classList.toggle('show', selected.size>0 && currentSheet==='active');
 }
-function bulkLaunch() {
+async function bulkLaunch() {
   const idxs = [...selected].sort((a,b)=>b-a);
   let count = 0;
   idxs.forEach(i => {
@@ -1331,8 +1330,7 @@ function bulkLaunch() {
     }
   });
   logAction('bulk-launch', '', `${count} рядків → ZAP`);
-  dbPutAll('atm', sheets.active).catch(()=>{});
-  dbPutAll('zap', sheets.zap).catch(()=>{});
+  await saveAllToServer();
   selected.clear(); render(); updateUI();
   if (count===0) alert('Жоден з вибраних не готовий до запуску');
 }
@@ -1365,11 +1363,11 @@ function bulkCheckConditional(field) {
   saveSheetToDB('active').catch(()=>{});
   render();
 }
-function bulkDelete() {
+async function bulkDelete() {
   if (!confirm(`Видалити ${selected.size} рядків?`)) return;
   [...selected].sort((a,b)=>b-a).forEach(i=>sheets.active.splice(i,1));
   logAction('bulk-delete', '', `${selected.size} рядків видалено`);
-  saveSheetToDB('active').catch(()=>{});
+  await saveAllToServer();
   selected.clear(); render(); updateUI();
 }
 
