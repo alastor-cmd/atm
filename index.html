@@ -582,7 +582,7 @@ function rowToSB(row, sheet) {
     date_slo:      row['Date SLO']     || '',
     date_start:    row['Date Start']   || '',
     note:          row.Note            || '',
-    sheet:         sheet,
+    // sheet більше не потрібен — окремі таблиці
     meta_created:  (row.__meta||{}).created    || '',
     meta_modified: (row.__meta||{}).modified   || '',
     meta_launched: (row.__meta||{}).launchedAt || '',
@@ -596,14 +596,16 @@ async function saveAllToServer() {
   if (_saving) { _saveQueued = true; return; }
   _saving = true;
   try {
+    // ATM → atm_data, ZAP → atm_zap (окремі таблиці)
     await sbDelete('atm_data', 'id=gte.0');
-    const all = [
-      ...sheets.active.map(r => rowToSB(r,'ATM')),
-      ...sheets.zap.map(r => rowToSB(r,'ZAP'))
-    ];
-    if (all.length > 0) await sbPost('atm_data', all);
+    const atmAll = sheets.active.map(r => rowToSB(r,'ATM'));
+    if (atmAll.length > 0) await sbPost('atm_data', atmAll);
+
+    await sbDelete('atm_zap', 'id=gte.0');
+    const zapAll = sheets.zap.map(r => rowToSB(r,'ZAP'));
+    if (zapAll.length > 0) await sbPost('atm_zap', zapAll);
     document.getElementById('dbStatus').textContent =
-      '● Збережено · ATM: ' + sheets.active.length + ', ZAP: ' + sheets.zap.length +
+      '● Збережено · ATM: ' + sheets.active.length + ' · ZAP: ' + sheets.zap.length +
       ' · ' + new Date().toLocaleTimeString('uk-UA');
   } catch(e) {
     console.error('saveAllToServer error:', e);
@@ -636,9 +638,23 @@ async function loadFromDB() {
   try {
     document.getElementById('tableWrap').innerHTML =
       '<div class="empty-state"><p>⏳ Завантаження з бази...</p></div>';
-    const rows = await sbGet('atm_data', 'order=id.asc&limit=1000');
-    const atmRows = rows.filter(r => r.sheet === 'ATM').map(r => deserializeRow(r));
-    const zapRows = rows.filter(r => r.sheet === 'ZAP').map(r => deserializeRow(r));
+    // Завантажуємо ATM і ZAP з окремих таблиць
+    let atmAll = [], from = 0;
+    while (true) {
+      const chunk = await sbGet('atm_data', `order=id.asc&limit=1000&offset=${from}`);
+      atmAll = atmAll.concat(chunk);
+      if (chunk.length < 1000) break;
+      from += 1000;
+    }
+    let zapAll = [], from2 = 0;
+    while (true) {
+      const chunk = await sbGet('atm_zap', `order=id.asc&limit=1000&offset=${from2}`);
+      zapAll = zapAll.concat(chunk);
+      if (chunk.length < 1000) break;
+      from2 += 1000;
+    }
+    const atmRows = atmAll.map(r => deserializeRow(r));
+    const zapRows = zapAll.map(r => deserializeRow(r));
     if (atmRows.length > 0 || zapRows.length > 0) {
       sheets.active = atmRows;
       sheets.zap = zapRows;
@@ -652,7 +668,7 @@ async function loadFromDB() {
     currentSheet = 'active';
     rebuildFilters(); render(); updateUI();
     document.getElementById('dbStatus').textContent =
-      '● Supabase · ATM: ' + sheets.active.length + ', ZAP: ' + sheets.zap.length;
+      '● ATM: ' + sheets.active.length + ' · ZAP: ' + sheets.zap.length;
     document.getElementById('info').textContent =
       `ATM ${sheets.active.length}, ZAP ${sheets.zap.length} · ${new Date().toLocaleTimeString('uk-UA')}`;
   } catch(e) {
