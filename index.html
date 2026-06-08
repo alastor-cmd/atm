@@ -1668,27 +1668,16 @@ function exportMonthReport(selectedMonth) {
     return d && d.slice(0,7) === selectedMonth;
   });
   const data = rows.map(r => ({
-    'Тип':         r._type==='IPT' ? 'ІПТ' : 'ATM',
-    'ID':          r.ID||'',
-    'Адреса':      r.ADRES||'',
-    'Організація': r.Org||'',
-    'FIO':         r.FIO||'',
-    'Date Start':  fmtDateUk(r['Date Start']),
-    'Статус':      sheets.zap.includes(r) ? 'Запущено' : 'В роботі',
-    'Договір':     r.dogovir ? '✓' : '',
-    'Перевезено':  r.DIS ? '✓' : '',
-    'Рахунки':     r.BEC ? '✓' : '',
-    'Ліміти':      r.Limi ? '✓' : '',
-    'ТМК':         r['ТМК'] ? '✓' : '',
-    'Сигналізація':r['Сигналізація'] ? '✓' : '',
-    'СБОН':        r['СБОН'] ? '✓' : '',
-    'Порт':        r.port||'',
-    'Date SLO':    fmtDateUk(r['Date SLO']),
-    'Нотатки':     r.Note||'',
+    'Тип':        r._type==='IPT' ? 'ІПТ' : 'ATM',
+    'ID':         r.ID||'',
+    'Old ATM':    r['Old ATM']||'',
+    'Адреса':     r.ADRES||'',
+    'Порт':       r.port||'',
+    'Date Start': fmtDateUk(r['Date Start']),
   }));
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(data);
-  ws['!cols'] = [8,14,40,28,18,14,12,10,10,10,10,8,12,8,8,14,30].map(w=>({wch:w}));
+  ws['!cols'] = [8,14,14,42,8,14].map(w=>({wch:w}));
   XLSX.utils.book_append_sheet(wb, ws, monthName.slice(0,31));
   XLSX.writeFile(wb, `atm_report_${selectedMonth}.xlsx`);
   logAction('export', '—', `Звіт за ${monthName}: ${rows.length} пристроїв`);
