@@ -497,6 +497,22 @@ async function sbDelete(table, filter) {
     console.warn('sbDelete warning:', r.status, await r.text());
   }
 }
+async function sbUpsert(table, data, conflict) {
+  const BATCH = 500;
+  const arr = Array.isArray(data) ? data : [data];
+  const params = conflict ? `?on_conflict=${encodeURIComponent(conflict)}` : '';
+  for (let i = 0; i < arr.length; i += BATCH) {
+    const chunk = arr.slice(i, i + BATCH);
+    const r = await fetch(`${SB_URL}/rest/v1/${table}${params}`, {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY,
+                 'Content-Type': 'application/json',
+                 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(chunk)
+    });
+    if (!r.ok) throw new Error(await r.text());
+  }
+}
 
 async function initDB() {
   try {
