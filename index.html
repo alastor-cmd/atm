@@ -588,24 +588,29 @@ function rowToSB(row, sheet) {
     meta_launched: (row.__meta||{}).launchedAt || '',
   };
 }
+let _saving = false;
+let _saveQueued = false;
+
 async function saveAllToServer() {
+  // Захист від паралельних викликів
+  if (_saving) { _saveQueued = true; return; }
+  _saving = true;
   try {
-    // Видаляємо всі записи
     await sbDelete('atm_data', 'id=gte.0');
     const all = [
       ...sheets.active.map(r => rowToSB(r,'ATM')),
       ...sheets.zap.map(r => rowToSB(r,'ZAP'))
     ];
-    if (all.length > 0) {
-      await sbPost('atm_data', all);
-    }
-    // Оновлюємо статус
+    if (all.length > 0) await sbPost('atm_data', all);
     document.getElementById('dbStatus').textContent =
       '● Збережено · ATM: ' + sheets.active.length + ', ZAP: ' + sheets.zap.length +
       ' · ' + new Date().toLocaleTimeString('uk-UA');
   } catch(e) {
     console.error('saveAllToServer error:', e);
-    document.getElementById('dbStatus').textContent = '⚠ Помилка збереження: ' + e.message;
+    document.getElementById('dbStatus').textContent = '⚠ Помилка: ' + e.message;
+  } finally {
+    _saving = false;
+    if (_saveQueued) { _saveQueued = false; saveAllToServer(); }
   }
 }
 function dbPutAll(storeName, items) { return saveAllToServer(); }
@@ -1256,7 +1261,7 @@ function createNewRow(type) {
   });
   sheets[currentSheet].push(empty);
   logAction('add', tempId, `новий ${type} · тимчасовий ID`);
-  saveAllToServer().catch(()=>{});
+  saveAllToServer();
   saveSheetToDB(currentSheet).catch(()=>{});
   render(); updateUI();
 }
