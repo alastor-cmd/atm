@@ -588,41 +588,46 @@ function rowToSB(row, sheet) {
     meta_launched: (row.__meta||{}).launchedAt || '',
   };
 }
-let _saving = false;
-let _saveTimer = null;
-
-// Дебаунс — чекаємо 300мс після останнього виклику
-function saveAllToServer() {
-  if (_saveTimer) clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(_doSave, 300);
-  return new Promise(resolve => {
-    const orig = _saveTimer;
-    const check = setInterval(() => {
-      if (_saveTimer !== orig || !_saving) { clearInterval(check); resolve(); }
-    }, 50);
-  });
-}
-
-async function _doSave() {
-  if (_saving) { _saveTimer = setTimeout(_doSave, 300); return; }
-  _saving = true;
-  _saveTimer = null;
+// UPSERT підхід — дублі неможливі на рівні БД
+async function saveAllToServer() {
   try {
-    // Знімок поточного стану
-    const atmRows = sheets.active.map(r => rowToSB(r,'ATM'));
-    const zapRows = sheets.zap.map(r => rowToSB(r,'ZAP'));
-    const all = [...atmRows, ...zapRows];
-    await sbDelete('atm_data', 'id=gte.0');
-    if (all.length > 0) await sbPost('atm_data', all);
+    const all = [
+      ...sheets.active.map(r => rowToSB(r,'ATM')),
+      ...sheets.zap.map(r => rowToSB(r,'ZAP'))
+    ];
+    // UPSERT по atm_id+sheet — оновлює існуючі, вставляє нові
+    if (all.length > 0) await sbUpsert('atm_data', all, 'atm_id,sheet');
     document.getElementById('dbStatus').textContent =
       '● Збережено · ATM: ' + sheets.active.length + ' · ZAP: ' + sheets.zap.length +
       ' · ' + new Date().toLocaleTimeString('uk-UA');
   } catch(e) {
-    console.error('_doSave error:', e);
+    console.error('saveAllToServer error:', e);
     document.getElementById('dbStatus').textContent = '⚠ Помилка: ' + e.message;
-  } finally {
-    _saving = false;
   }
+}
+
+// При переносі ATM→ZAP: оновлюємо sheet і видаляємо старий запис
+async function launchToZap(row) {
+  const atmId = row.ID;
+  if (!atmId) return saveAllToServer();
+  try {
+    // Видаляємо з ATM
+    await sbDelete('atm_data', `atm_id=eq.${encodeURIComponent(atmId)}&sheet=eq.ATM`);
+    // Вставляємо в ZAP
+    await sbUpsert('atm_data', [rowToSB(row,'ZAP')], 'atm_id,sheet');
+  } catch(e) { console.error('launchToZap error:', e); await saveAllToServer(); }
+}
+
+// При поверненні ZAP→ATM
+async function returnToActive(row) {
+  const atmId = row.ID;
+  if (!atmId) return saveAllToServer();
+  try {
+    // Видаляємо з ZAP
+    await sbDelete('atm_data', `atm_id=eq.${encodeURIComponent(atmId)}&sheet=eq.ZAP`);
+    // Вставляємо в ATM
+    await sbUpsert('atm_data', [rowToSB(row,'ATM')], 'atm_id,sheet');
+  } catch(e) { console.error('returnToActive error:', e); await saveAllToServer(); }
 }
 
 function saveActiveToServer() { return saveAllToServer(); }
@@ -1173,8 +1178,10 @@ function onCellChange(idx, key, value) {
   const old = rows[idx][key];
   if (String(old) === String(value)) return;
   logAction('edit', rows[idx].ID||'(без ID)', `${key}: "${old}" → "${value}"`);
-  const storeName = currentSheet === 'active' ? 'atm' : 'zap';
-  dbSaveRow(storeName, rows[idx]).catch(()=>{});
+  const sheet = currentSheet === 'active' ? 'ATM' : 'ZAP';
+  sbUpsert('atm_data', [rowToSB(rows[idx], sheet)], 'atm_id,sheet').catch(e => {
+    console.error('onCellChange upsert error:', e);
+  });
 }
 
 function updateCell(idx, key, value) {
@@ -1184,8 +1191,10 @@ function updateCell(idx, key, value) {
   rows[idx][key] = value;
   if (rows[idx].__meta) rows[idx].__meta.modified = todayISO();
   logAction('edit', rows[idx].ID||'(без ID)', `${key}: "${old}" → "${value}"`);
-  const _store = currentSheet === 'active' ? 'atm' : 'zap';
-  dbSaveRow(_store, rows[idx]).catch(()=>{});
+  const _sheet = currentSheet === 'active' ? 'ATM' : 'ZAP';
+  sbUpsert('atm_data', [rowToSB(rows[idx], _sheet)], 'atm_id,sheet').catch(e => {
+    console.error('updateCell upsert error:', e);
+  });
   render();
 }
 
@@ -1322,7 +1331,10 @@ async function launchRow(idx) {
   sheets.active.splice(idx,1);
   selected.delete(idx);
   logAction('launch', atmId||'(без ID)', '→ ZAP запущено');
-  await saveAllToServer();
+  await launchToZap(row);
+  document.getElementById('dbStatus').textContent =
+    '● Збережено · ATM: ' + sheets.active.length + ' · ZAP: ' + sheets.zap.length +
+    ' · ' + new Date().toLocaleTimeString('uk-UA');
   render(); updateUI();
 }
 
@@ -1334,7 +1346,10 @@ async function returnRow(idx) {
   sheets.active.push(row);
   sheets.zap.splice(idx,1);
   logAction('return', atmId||'(без ID)', 'ZAP → Активні');
-  await saveAllToServer();
+  await returnToActive(row);
+  document.getElementById('dbStatus').textContent =
+    '● Збережено · ATM: ' + sheets.active.length + ' · ZAP: ' + sheets.zap.length +
+    ' · ' + new Date().toLocaleTimeString('uk-UA');
   render(); updateUI();
 }
 
