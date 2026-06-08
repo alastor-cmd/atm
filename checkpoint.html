@@ -374,11 +374,21 @@ function getCurrentMonth() {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
 }
 
+function normalizeModel(model) {
+  if (!model) return null;
+  const m = model.toUpperCase();
+  if (m.includes('1430')) return 'CP1430';
+  if (m.includes('1100')) return 'CP1100';
+  if (m.includes('1535') || m.includes('1530')) return 'CP1530';
+  return model; // інші залишаємо як є
+}
+
 function countByModel(devs) {
   const counts = {};
   devs.forEach(d => {
-    if (!d.model) return;
-    counts[d.model] = (counts[d.model]||0) + 1;
+    const model = normalizeModel(d.model);
+    if (!model) return;
+    counts[model] = (counts[model]||0) + 1;
   });
   return counts;
 }
@@ -539,7 +549,7 @@ async function buildTable() {
   });
 
   // Заповнюємо multi-select фільтр моделей
-  const models = [...new Set(devices.map(d => d.model).filter(Boolean))].sort();
+  const models = [...new Set(devices.map(d => normalizeModel(d.model)).filter(Boolean))].sort();
   fillModelDropdown(models);
 
   document.getElementById('toolbar').style.display = 'flex';
@@ -579,6 +589,14 @@ async function buildTable() {
     const modelCounts = countByModel(devices);
     await saveStatSnapshot(curMonth, modelCounts);
     await saveMeta('lastStatMonth', curMonth);
+
+    // Тижнева розбивка — додаємо поточний тиждень
+    const today = todayISO();
+    const weekNum = getWeekOfMonth(today);
+    const weekStats = getWeekStats();
+    if (!weekStats[curMonth]) weekStats[curMonth] = {};
+    weekStats[curMonth][weekNum] = { counts: modelCounts, date: today };
+    saveWeekStats(weekStats);
   }
 
   updateDBStatus();
@@ -932,43 +950,118 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// Завантажуємо тижневу статистику з localStorage
+function getWeekStats() {
+  try { return JSON.parse(localStorage.getItem('cp_week_stats')) || {}; } catch(e) { return {}; }
+}
+function saveWeekStats(data) {
+  localStorage.setItem('cp_week_stats', JSON.stringify(data));
+}
+
+// Отримуємо номер тижня місяця (1-5) по даті завантаження
+function getWeekOfMonth(dateISO) {
+  if (!dateISO) return 1;
+  const d = new Date(dateISO);
+  // Знаходимо перший понеділок місяця
+  const firstDay = new Date(d.getFullYear(), d.getMonth(), 1);
+  const dayOfWeek = firstDay.getDay() || 7; // 1=пн..7=нд
+  const firstMonday = dayOfWeek === 1 ? 1 : 1 + (8 - dayOfWeek);
+  const dayOfMonth = d.getDate();
+  if (dayOfMonth < firstMonday) return 1;
+  return Math.floor((dayOfMonth - firstMonday) / 7) + 2;
+}
+
 async function showStats() {
   const stats = await loadAllStats();
   if (!stats.length) {
     alert('Статистика ще не накопичена. Завантажте файли — перший знімок буде збережено.');
     return;
   }
-  // Збираємо всі моделі
-  const allModels = [...new Set(stats.flatMap(s => Object.keys(s.counts)))].sort();
-  const months = stats.map(s => s.month);
 
-  // Таблиця місяць × модель
-  let thead = '<tr><th>Місяць</th>' + allModels.map(m=>`<th>${esc(m)}</th>`).join('') + '<th>Всього</th></tr>';
+  const weekStats = getWeekStats();
+  const allModels = [...new Set(stats.flatMap(s => Object.keys(s.counts)))].sort();
+
+  const thStyle = 'style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e7eb;font-size:11px;font-weight:600;white-space:nowrap"';
+  const thStyleL = 'style="padding:7px 10px;text-align:left;border-bottom:1px solid #e5e7eb;font-size:11px;font-weight:600"';
+  const tdStyle = 'style="padding:6px 10px;text-align:right;border-bottom:1px solid #f3f4f6;font-size:12px"';
+  const tdStyleL = 'style="padding:6px 10px;border-bottom:1px solid #f3f4f6;font-size:12px"';
+
+  let thead = `<tr>
+    <th ${thStyleL}>Місяць</th>
+    ${allModels.map(m=>`<th ${thStyle}>${esc(m)}</th>`).join('')}
+    <th ${thStyle}>Всього</th>
+    <th style="padding:7px 10px;border-bottom:1px solid #e5e7eb;width:40px"></th>
+  </tr>`;
+
   let tbody = stats.map(s => {
     const total = Object.values(s.counts).reduce((a,b)=>a+b,0);
-    const cells = allModels.map(m => `<td style="text-align:right">${s.counts[m]||0}</td>`).join('');
+    const cells = allModels.map(m => `<td ${tdStyle}>${s.counts[m]||0}</td>`).join('');
     const [yr,mo] = s.month.split('-');
     const monthName = new Date(yr,mo-1).toLocaleString('uk-UA',{month:'long',year:'numeric'});
-    return `<tr><td style="white-space:nowrap"><strong>${monthName}</strong></td>${cells}<td style="text-align:right;font-weight:500">${total}</td></tr>`;
+
+    // Тижнева розбивка
+    const wks = weekStats[s.month] || {};
+    const weekNums = Object.keys(wks).sort((a,b)=>a-b);
+    const weekRows = weekNums.map(wn => {
+      const wCounts = wks[wn].counts || {};
+      const wTotal = Object.values(wCounts).reduce((a,b)=>a+b,0);
+      const wDate = wks[wn].date || '';
+      return `<tr class="week-row" id="week-${s.month}" style="display:none;background:#f9fafb">
+        <td ${tdStyleL} style="padding:5px 10px 5px 24px;color:#6b7280;font-size:11px">
+          ↳ Тиждень ${wn} ${wDate ? '('+fmtDateCP(wDate)+')' : ''}
+        </td>
+        ${allModels.map(m=>`<td ${tdStyle} style="font-size:11px;color:#6b7280">${wCounts[m]||0}</td>`).join('')}
+        <td ${tdStyle} style="font-size:11px;color:#6b7280">${wTotal}</td>
+        <td></td>
+      </tr>`;
+    }).join('');
+
+    const hasWeeks = weekNums.length > 0;
+    const expandBtn = hasWeeks
+      ? `<button onclick="toggleWeeks('${s.month}',this)"
+           style="background:none;border:1px solid #d1d5db;border-radius:4px;padding:2px 6px;cursor:pointer;font-size:11px;color:#6b7280">+</button>`
+      : `<span style="color:#d1d5db;font-size:11px">—</span>`;
+
+    return `
+      <tr style="font-weight:500">
+        <td ${tdStyleL}>${monthName}</td>
+        ${cells}
+        <td ${tdStyle} style="font-weight:600">${total}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #f3f4f6;text-align:center">${expandBtn}</td>
+      </tr>
+      ${weekRows}`;
   }).join('');
 
   document.getElementById('modalContent').innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <h2 style="margin:0">📊 Статистика профайлів CP по місяцях</h2>
+      <h2 style="margin:0">📊 Статистика профайлів CP</h2>
       <div style="display:flex;gap:8px">
         <button class="btn btn-green" onclick="exportStats()">📥 Excel</button>
         <button class="btn" onclick="closeModal()">Закрити</button>
       </div>
     </div>
     <p style="color:var(--muted);font-size:12px;margin-bottom:14px">
-      Знімок фіксується при першому завантаженні файлів у кожному місяці
+      Місячний знімок · натисніть <strong>+</strong> для розбивки по тижнях
     </p>
     <div style="overflow:auto">
-    <table class="modal-table">
+    <table style="width:100%;border-collapse:collapse">
       <thead>${thead}</thead>
       <tbody>${tbody}</tbody>
     </table></div>`;
   document.getElementById('modal').classList.add('show');
+}
+
+function fmtDateCP(iso) {
+  if (!iso) return '';
+  const m = iso.match(/(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}.${m[2]}` : iso;
+}
+
+function toggleWeeks(month, btn) {
+  const rows = document.querySelectorAll(`tr.week-row#week-${month}`);
+  const isHidden = rows[0]?.style.display === 'none';
+  rows.forEach(r => r.style.display = isHidden ? '' : 'none');
+  btn.textContent = isHidden ? '−' : '+';
 }
 
 async function exportStats() {
