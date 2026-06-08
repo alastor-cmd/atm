@@ -582,7 +582,7 @@ function rowToSB(row, sheet) {
     date_slo:      row['Date SLO']     || '',
     date_start:    row['Date Start']   || '',
     note:          row.Note            || '',
-    // sheet більше не потрібен — окремі таблиці
+    sheet:         sheet,
     meta_created:  (row.__meta||{}).created    || '',
     meta_modified: (row.__meta||{}).modified   || '',
     meta_launched: (row.__meta||{}).launchedAt || '',
@@ -594,8 +594,12 @@ async function saveAllToServer() {
   if (_saving) return;
   _saving = true;
   try {
-    await saveActiveToServer();
-    await saveZapToServer();
+    await sbDelete('atm_data', 'id=gte.0');
+    const all = [
+      ...sheets.active.map(r => rowToSB(r,'ATM')),
+      ...sheets.zap.map(r => rowToSB(r,'ZAP'))
+    ];
+    if (all.length > 0) await sbPost('atm_data', all);
     document.getElementById('dbStatus').textContent =
       '● Збережено · ATM: ' + sheets.active.length + ' · ZAP: ' + sheets.zap.length +
       ' · ' + new Date().toLocaleTimeString('uk-UA');
@@ -608,43 +612,17 @@ async function saveAllToServer() {
 }
 
 async function saveActiveToServer() {
-  // Спочатку видаляємо всі, потім вставляємо актуальні
+  // Видаляємо тільки ATM записи, потім вставляємо актуальні
+  await sbDelete('atm_data', 'sheet=eq.ATM');
   const rows = sheets.active.map(r => rowToSB(r,'ATM'));
-  // Видаляємо записи яких вже немає в активних
-  const activeIds = rows.map(r => r.atm_id).filter(Boolean);
-  await sbDelete('atm_data', 'id=gte.0');
   if (rows.length > 0) await sbPost('atm_data', rows);
 }
 
 async function saveZapToServer() {
+  // Видаляємо тільки ZAP записи, потім вставляємо актуальні
+  await sbDelete('atm_data', 'sheet=eq.ZAP');
   const rows = sheets.zap.map(r => rowToSB(r,'ZAP'));
-  await sbDelete('atm_zap', 'id=gte.0');
-  if (rows.length > 0) await sbPost('atm_zap', rows);
-}
-
-// Зберегти лише один рядок в ZAP (при launch)
-async function addToZap(row) {
-  const r = rowToSB(row, 'ZAP');
-  // Видаляємо якщо вже є (на випадок дубля)
-  if (r.atm_id) await sbDelete('atm_zap', `atm_id=eq.${r.atm_id}`);
-  await sbPost('atm_zap', [r]);
-}
-
-// Видалити один рядок з ZAP (при return)
-async function removeFromZap(atmId) {
-  if (atmId) await sbDelete('atm_zap', `atm_id=eq.${atmId}`);
-}
-
-// Зберегти лише один рядок в ATM (при return)
-async function addToActive(row) {
-  const r = rowToSB(row, 'ATM');
-  if (r.atm_id) await sbDelete('atm_data', `atm_id=eq.${r.atm_id}`);
-  await sbPost('atm_data', [r]);
-}
-
-// Видалити один рядок з ATM (при launch)
-async function removeFromActive(atmId) {
-  if (atmId) await sbDelete('atm_data', `atm_id=eq.${atmId}`);
+  if (rows.length > 0) await sbPost('atm_data', rows);
 }
 
 
@@ -671,23 +649,16 @@ async function loadFromDB() {
   try {
     document.getElementById('tableWrap').innerHTML =
       '<div class="empty-state"><p>⏳ Завантаження з бази...</p></div>';
-    // Завантажуємо ATM і ZAP з окремих таблиць
-    let atmAll = [], from = 0;
+    // Завантажуємо всі дані з однієї таблиці
+    let allRows = [], from = 0;
     while (true) {
       const chunk = await sbGet('atm_data', `order=id.asc&limit=1000&offset=${from}`);
-      atmAll = atmAll.concat(chunk);
+      allRows = allRows.concat(chunk);
       if (chunk.length < 1000) break;
       from += 1000;
     }
-    let zapAll = [], from2 = 0;
-    while (true) {
-      const chunk = await sbGet('atm_zap', `order=id.asc&limit=1000&offset=${from2}`);
-      zapAll = zapAll.concat(chunk);
-      if (chunk.length < 1000) break;
-      from2 += 1000;
-    }
-    const atmRows = atmAll.map(r => deserializeRow(r));
-    const zapRows = zapAll.map(r => deserializeRow(r));
+    const atmRows = allRows.filter(r => r.sheet === 'ATM').map(r => deserializeRow(r));
+    const zapRows = allRows.filter(r => r.sheet === 'ZAP').map(r => deserializeRow(r));
     if (atmRows.length > 0 || zapRows.length > 0) {
       sheets.active = atmRows;
       sheets.zap = zapRows;
@@ -1348,12 +1319,7 @@ async function launchRow(idx) {
   sheets.active.splice(idx,1);
   selected.delete(idx);
   logAction('launch', atmId||'(без ID)', '→ ZAP запущено');
-  // Точкові операції: видаляємо з ATM, додаємо в ZAP
-  await removeFromActive(atmId);
-  await addToZap(row);
-  document.getElementById('dbStatus').textContent =
-    '● Збережено · ATM: ' + sheets.active.length + ' · ZAP: ' + sheets.zap.length +
-    ' · ' + new Date().toLocaleTimeString('uk-UA');
+  await saveAllToServer();
   render(); updateUI();
 }
 
@@ -1365,12 +1331,7 @@ async function returnRow(idx) {
   sheets.active.push(row);
   sheets.zap.splice(idx,1);
   logAction('return', atmId||'(без ID)', 'ZAP → Активні');
-  // Точкові операції: видаляємо з ZAP, додаємо в ATM
-  await removeFromZap(atmId);
-  await addToActive(row);
-  document.getElementById('dbStatus').textContent =
-    '● Збережено · ATM: ' + sheets.active.length + ' · ZAP: ' + sheets.zap.length +
-    ' · ' + new Date().toLocaleTimeString('uk-UA');
+  await saveAllToServer();
   render(); updateUI();
 }
 
@@ -1396,11 +1357,7 @@ async function bulkLaunch() {
     }
   });
   logAction('bulk-launch', '', `${count} рядків → ZAP`);
-  await saveZapToServer();
-  await saveActiveToServer();
-  document.getElementById('dbStatus').textContent =
-    '● Збережено · ATM: ' + sheets.active.length + ' · ZAP: ' + sheets.zap.length +
-    ' · ' + new Date().toLocaleTimeString('uk-UA');
+  await saveAllToServer();
   selected.clear(); render(); updateUI();
   if (count===0) alert('Жоден з вибраних не готовий до запуску');
 }
